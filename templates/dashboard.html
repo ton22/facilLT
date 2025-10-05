@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard Admin{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="fa fa-chart-bar"></i> Dashboard do Administrador</h2>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card text-bg-primary mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fa fa-users"></i> Usuários</h5>
+                <p class="card-text display-6">{{ total_usuarios }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-bg-success mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fa fa-magic"></i> Predições</h5>
+                <p class="card-text display-6">{{ total_predicoes }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-bg-warning mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fa fa-crown"></i> Admins</h5>
+                <p class="card-text display-6">{{ total_admins }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+<a href="{{ url_for('exportar_predicoes') }}" class="btn btn-outline-secondary"><i class="fa fa-file-csv"></i> Exportar Predições CSV</a>
+<a href="{{ url_for('index') }}" class="btn btn-secondary ms-2"><i class="fa fa-arrow-left"></i> Voltar</a>
+
+<hr>
+<h3 class="mt-4">Análise de Números</h3>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+    <p class="text-muted mb-2 mb-md-0">Resumo estatístico — escolha a fonte dos dados:</p>
+    <div class="btn-group w-100 w-md-auto" role="group" aria-label="Fonte dos dados">
+        <a href="?source=predicoes" class="btn btn-sm btn-outline-primary {% if data_source != 'concursos' %}active{% endif %}">
+            <i class="fa fa-save me-1"></i>
+            <span class="d-none d-sm-inline">Predições </span>Salvas
+        </a>
+        <a href="?source=concursos" class="btn btn-sm btn-outline-success {% if data_source == 'concursos' %}active{% endif %}">
+            <i class="fa fa-trophy me-1"></i>
+            <span class="d-none d-sm-inline">Concursos </span>Oficiais
+        </a>
+    </div>
+</div>
+<p class="small text-muted mt-2">Legenda: <strong>Primos mais frequentes</strong> indica quais números primos (entre 1 e 25) aparecem mais vezes na fonte selecionada. <strong>Top faixas de soma</strong> agrupa as somas dos 15 números em faixas e mostra as faixas mais comuns.</p>
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-3 analysis-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                                <h5 class="card-title mb-0">Visão Geral</h5>
+                                <div class="legend">
+                        <div class="item"><span class="swatch swatch-prime"></span> Primos</div>
+                        <div class="item"><span class="swatch swatch-par"></span> Pares</div>
+                        <div class="item"><span class="swatch swatch-impar"></span> Ímpares</div>
+                        <div class="item"><span class="swatch swatch-sum"></span> Faixas de Soma</div>
+                    </div>
+                </div>
+                <p class="small text-muted mt-2">Os gráficos abaixo mostram frequências relativas (barras proporcionais à maior ocorrência do conjunto). As cores ajudam a identificar rapidamente categorias.</p>
+
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <h6>Primos mais frequentes <small class="text-muted">(quantas vezes cada primo apareceu na fonte)</small></h6>
+                        {% if prime_number_list %}
+                            {% set maxp = prime_number_list[0].count %}
+                            <ul class="list-unstyled mb-0">
+                                {% for item in prime_number_list[:10] %}
+                                    {% set pct = (item.count / maxp * 100) if maxp else 0 %}
+                                    <li class="mb-2">
+                                        <div class="d-flex justify-content-between"><strong class="me-2 prime-badge">{{ item.prime }}</strong><small class="text-muted">{{ item.count }} vezes</small></div>
+                                        <div class="bar-bg"><div class="bar-fill-prime" style="width:{{ '%.1f'|format(pct) }}%"></div></div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted small">Nenhuma predição registrada.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-4">
+                        <h6>Pares / Ímpares (por jogo) <small class="text-muted">(quantidade de números pares / ímpares em cada jogo)</small></h6>
+                        {% if even_count_list and odd_count_list %}
+                            <p class="small text-muted">Destacado em amarelo: maior incidência encontrada.</p>
+                            <div class="mb-2"><strong>Pares</strong></div>
+                            <ul class="list-unstyled mb-3">
+                                {% for it in even_display_list %}
+                                    <li class="mb-2"><div class="d-flex justify-content-between"><span>{{ it.pares }} pares</span><small class="text-muted">{{ it.vezes }}</small></div>
+                                        <div class="bar-bg"><div class="bar-fill-even" style="width:{{ it.pct }}%"></div></div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+
+                            <div class="mb-2"><strong>Ímpares</strong></div>
+                            <ul class="list-unstyled mb-0">
+                                {% for it in odd_display_list %}
+                                    <li class="mb-2"><div class="d-flex justify-content-between"><span>{{ it.impares }} ímpares</span><small class="text-muted">{{ it.vezes }}</small></div>
+                                        <div class="bar-bg"><div class="bar-fill-odd" style="width:{{ it.pct }}%"></div></div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted small">Nenhuma predição registrada.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-4">
+                        <h6>Top Faixas de Soma <small class="text-muted">(ex.: "173-178 -> 3x" significa que 3 jogos tiveram soma dentro dessa faixa)</small></h6>
+                        {% if sum_range_counts %}
+                            {% set maxs = sum_range_counts[0].count %}
+                            <ul class="list-unstyled mb-0">
+                                {% for item in sum_range_counts[:10] %}
+                                    {% set pct = (item.count / maxs * 100) if maxs else 0 %}
+                                    <li class="mb-2">
+                                        <div class="d-flex justify-content-between"><span class="range-label">{{ item.range }}</span><small class="text-muted">{{ item.count }}x</small></div>
+                                        <div class="bar-bg"><div class="bar-fill-sum" style="width:{{ '%.1f'|format(pct) }}%"></div></div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted small">Nenhuma predição registrada.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

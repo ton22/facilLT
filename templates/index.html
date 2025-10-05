@@ -1,0 +1,317 @@
+{% extends "layout.html" %}
+{% block title %}Lotofácil - Predição{% endblock %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <h1 class="mb-3"><i class="fa fa-magic"></i> Lotofácil - Predição e Treinamento</h1>
+                    <p>Este sistema utiliza inteligência artificial para analisar resultados anteriores da Lotofácil e sugerir jogos com maior potencial. Você pode inserir seus números, pedir sugestões automáticas, salvar ou descartar predições, exportar seu histórico e acompanhar o status do treinamento do modelo.</p>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6 mb-2">
+                    <div class="card text-bg-info">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="fa fa-cog"></i> Status do Sistema</h5>
+                            <p class="card-text">Treinado até o concurso <strong>{{ ultimo_concurso }}</strong></p>
+                            {% if em_treinamento %}
+                                <span class="badge bg-warning text-dark"><i class="fa fa-cog fa-spin"></i> Em treinamento</span>
+                            {% else %}
+                                <span class="badge bg-success"><i class="fa fa-check"></i> Pronto para predição</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <div class="card text-bg-primary">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="fa fa-chart-bar"></i> Estatísticas</h5>
+                            <p class="card-text">Total de predições: <strong>{{ total_predicoes }}</strong><br>Seus jogos salvos: <strong>{{ total_jogos_usuario }}</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fa fa-lightbulb"></i> Dica</h5>
+                    <p class="card-text">Utilize o botão de sugestão automática para receber palpites baseados no aprendizado do sistema.</p>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fa fa-history"></i> Últimas Predições</h5>
+                    <ul class="list-group">
+                        {% for p in ultimas_predicoes %}
+                            <li class="list-group-item">{{ p.numeros }} - Pontuação: {{ p.pontuacao }}</li>
+                        {% else %}
+                            <li class="list-group-item">Nenhuma predição recente.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-8 mx-auto">
+                                            {% if user_type == 'admin' %}
+                                            <form action="/treinar" method="post" onsubmit="showLoading('treinamento')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-danger mt-2"><i class="fa fa-robot"></i> Executar Treinamento</button>
+                                            </form>
+                                            {% endif %}
+            <form action="/predicao" method="post" onsubmit="return validarNumeros()">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="d-flex flex-wrap justify-content-center">
+                    {% for i in range(1, 16) %}
+                        <input type="number" name="numero{{ i }}" class="numero-input" min="1" max="25" required style="appearance: none;">
+                    {% endfor %}
+                </div>
+                <div class="text-center mt-2">
+                    {% if predicao_chance_label is defined and predicao_chance_score is not none %}
+                        <span id="soma-display" class="badge bg-secondary">Soma: {{ predicao_soma }}</span>
+                        <span id="heatmap-badge" class="badge ms-2" style="background: {{ predicao_chance_color }}; color: #fff">Chance: {{ predicao_chance_label }} ({{ predicao_chance_score }}%)</span>
+                    {% else %}
+                        <span id="soma-display" class="badge bg-secondary">Soma: 0</span>
+                        <span id="heatmap-badge" class="badge ms-2" style="background:#e0e0e0;color:#000">Chance: -</span>
+                    {% endif %}
+                </div>
+                <div class="legend">
+                    <div class="item"><span class="swatch swatch-prime"></span><small>Primo</small></div>
+                    <div class="item"><span class="swatch swatch-par"></span><small>Par</small></div>
+                    <div class="item"><span class="swatch swatch-impar"></span><small>Ímpar</small></div>
+                </div>
+                <button type="button" class="btn btn-success mt-3" onclick="gerarSugestao()"><i class="fa fa-bolt"></i> Sugestão Automática</button>
+                <button type="submit" class="btn btn-primary mt-3 ms-2"><i class="fa fa-search"></i> Fazer Predição</button>
+            </form>
+            <div id="loading" class="loading alert alert-info">
+                <i class="fa fa-spinner fa-spin"></i> Processando... Por favor, aguarde.
+            </div>
+            {% if mensagem %}
+                <div class="alert alert-success mt-3">{{ mensagem }}</div>
+            {% endif %}
+            {% if predicao %}
+                <div id="predicao-block" class="alert alert-secondary mt-3">
+                    <strong>Números previstos:</strong> {{ predicao.numeros }}<br>
+                    <strong>Pontuação estimada:</strong> {{ predicao.pontuacao }}<br>
+                    {% if predicao_chance_label is defined and predicao_chance_score is not none %}
+                        <div class="mt-2">
+                            <span id="soma-display" class="badge bg-secondary">Soma: {{ predicao_soma }}</span>
+                            <span id="heatmap-badge" class="badge ms-2" style="background: {{ predicao_chance_color }}; color: #fff">Chance: {{ predicao_chance_label }} ({{ predicao_chance_score }}%)</span>
+                        </div>
+                    {% endif %}
+                    <form action="/salvar_predicao" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="numeros" value="{{ predicao.numeros }}">
+                        <input type="hidden" name="pontuacao" value="{{ predicao.pontuacao }}">
+                        <button type="submit" class="btn btn-outline-success btn-sm"><i class="fa fa-save"></i> Salvar</button>
+                    </form>
+                    <form action="/descartar_predicao" method="post" class="d-inline ms-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa fa-times"></i> Descartar</button>
+                    </form>
+                </div>
+                <script>
+                    // populate soma and badge from server-side precomputed values (if available)
+                    (function(){
+                        try{
+                            const somaEl = document.getElementById('soma-display');
+                            const badge = document.getElementById('heatmap-badge');
+                            const soma = {{ predicao_soma|default(None)|tojson }};
+                            const label = {{ predicao_chance_label|default(None)|tojson }};
+                            const score = {{ predicao_chance_score|default(None)|tojson }};
+                            if(soma !== null && somaEl) somaEl.textContent = 'Soma: ' + soma;
+                            if(label !== null && score !== null && badge){
+                                let color = '#d9534f';
+                                if(score >= 70) color = '#5cb85c';
+                                else if(score >= 40) color = '#f0ad4e';
+                                badge.style.background = color; badge.style.color = '#fff';
+                                badge.textContent = `Chance: ${label} (${score}%)`;
+                            }
+                        }catch(e){ console.log('populate badge failed', e); }
+                    })();
+                </script>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if predicao %}
+<script>
+    // Quando houver uma predição no servidor, rola suavemente até o bloco de resultado
+    document.addEventListener('DOMContentLoaded', function() {
+        const el = document.getElementById('predicao-block');
+        // if server sent a prediction, try to prefill input fields so heatmap and UI can evaluate it
+        try {
+            const cells = document.querySelectorAll('.numero-input');
+            // predicao.numeros is expected to be a list; render as JSON on server side
+            const predNums = {{ predicao.numeros|tojson }};
+            if (predNums && cells && predNums.length === cells.length) {
+                predNums.forEach((num, idx) => { cells[idx].value = num; });
+                // small delay to allow layout then update UI
+                setTimeout(() => { updateUI(); }, 120);
+            }
+        } catch (e) {
+            // ignore if parsing fails
+            console.log('prefill predicao failed', e);
+        }
+        if (el) {
+            // aguarda um pouco para garantir que o layout esteja pronto
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+        }
+    });
+</script>
+{% endif %}
+
+<script>
+    // server-provided stats for heatmap (injected as JSON)
+    const SERVER_STATS = {{ stats|tojson|safe }};
+    function showLoading(tipo) {
+        document.getElementById("loading").style.display = "block";
+    }
+    function validarNumeros() {
+        const inputs = document.querySelectorAll(".numero-input");
+        const valores = Array.from(inputs).map(input => parseInt(input.value));
+        const unicos = new Set(valores);
+        if (valores.length !== 15 || unicos.size !== 15 || valores.some(v => v < 1 || v > 25)) {
+            alert("Digite 15 números únicos entre 1 e 25.");
+            return false;
+        }
+        showLoading("predicao");
+        return true;
+    }
+    function gerarSugestao() {
+        fetch('/sugestao_automatica')
+            .then(response => response.json())
+            .then(data => {
+                const inputs = document.querySelectorAll('.numero-input');
+                data.numeros.forEach((num, idx) => {
+                    inputs[idx].value = num;
+                });
+                // Atualiza visual (cores e soma) após preencher sugestão
+                updateUI();
+            });
+    }
+</script>
+
+<!-- styles moved to static/style.css -->
+<script>
+    function showLoading(tipo) {
+        document.getElementById("loading").style.display = "block";
+    }
+    function validarNumeros() {
+        const inputs = document.querySelectorAll(".numero-input");
+        const valores = Array.from(inputs).map(input => parseInt(input.value));
+        const unicos = new Set(valores);
+        if (valores.length !== 15 || unicos.size !== 15 || valores.some(v => v < 1 || v > 25)) {
+            alert("Digite 15 números únicos entre 1 e 25.");
+            return false;
+        }
+        showLoading("predicao");
+        return true;
+    }
+    // UTIL: verifica primo
+    function isPrime(n) {
+        if (!n || n < 2) return false;
+        if (n === 2) return true;
+        if (n % 2 === 0) return false;
+        for (let i = 3; i * i <= n; i += 2) if (n % i === 0) return false;
+        return true;
+    }
+
+    function updateNumberStyles() {
+        const inputs = document.querySelectorAll('.numero-input');
+        inputs.forEach(inp => {
+            inp.classList.remove('numero-primo','numero-par','numero-impar');
+            const v = parseInt(inp.value);
+            if (!v) return;
+            if (isPrime(v)) inp.classList.add('numero-primo');
+            else if (v % 2 === 0) inp.classList.add('numero-par');
+            else inp.classList.add('numero-impar');
+        });
+    }
+
+    function updateSum() {
+        const inputs = document.querySelectorAll('.numero-input');
+        const valores = Array.from(inputs).map(i => parseInt(i.value) || 0);
+        const soma = valores.reduce((a,b) => a + b, 0);
+        const el = document.getElementById('soma-display');
+        if (el) el.textContent = 'Soma: ' + soma;
+        // update heatmap after sum changes
+        updateHeatmap(valores, soma);
+    }
+
+    // compute a simple "chance score" [0..100] based on stats provided by server
+    function updateHeatmap(valores, soma) {
+        const badge = document.getElementById('heatmap-badge');
+        if (!badge) return;
+        // require 15 valid numbers
+        if (!valores || valores.length !== 15 || valores.some(v => v <= 0)) {
+            badge.style.background = '#e0e0e0'; badge.textContent = 'Chance: -'; return;
+        }
+    // server stats (injected)
+    const stats = SERVER_STATS || {sum_range_counts:[], most_common_primes:[], most_common_evens:[], prime_number_list:[]};
+        // score components:
+        // 1) sum range alignment: if soma falls in one of the top ranges -> +40
+        let sum_score = 0;
+        if (stats.sum_range_counts && stats.sum_range_counts.length) {
+            const topRanges = stats.sum_range_counts.map(it => it.range);
+            // find whether soma fits in top ranges (ranges like '120-140')
+            for (let i = 0; i < Math.min(3, topRanges.length); i++) {
+                const parts = topRanges[i].split('-').map(x => parseInt(x));
+                if (soma >= parts[0] && soma <= parts[1]) {
+                    // higher bonus for top-1, then smaller
+                    sum_score = 40 - (i * 10);
+                    break;
+                }
+            }
+        }
+        // 2) prime count closeness: compare count of primes in selection to most_common_primes
+        const primesSet = new Set([2,3,5,7,11,13,17,19,23]);
+        const primeCount = valores.reduce((acc, v) => acc + (primesSet.has(v) ? 1 : 0), 0);
+        let prime_score = 0;
+        if (stats.most_common_primes && stats.most_common_primes.length) {
+            const common = stats.most_common_primes[0];
+            const diff = Math.abs(primeCount - common);
+            prime_score = Math.max(0, 30 - diff * 7); // penalize difference
+        }
+        // 3) parity balance: if even count matches most_common_evens -> +30 scaled
+        const evenCount = valores.reduce((acc, v) => acc + (v % 2 === 0 ? 1 : 0), 0);
+        let parity_score = 0;
+        if (stats.most_common_evens && stats.most_common_evens.length) {
+            const commonEven = stats.most_common_evens[0];
+            const diffE = Math.abs(evenCount - commonEven);
+            parity_score = Math.max(0, 30 - diffE * 6);
+        }
+
+        // combine scores into 0..100
+        let score = Math.round(Math.min(100, sum_score + prime_score + parity_score));
+
+        // pick color bands
+        let color = '#d9534f'; // red
+        let label = 'Baixa';
+        if (score >= 70) { color = '#5cb85c'; label = 'Alta'; }
+        else if (score >= 40) { color = '#f0ad4e'; label = 'Média'; }
+
+        badge.style.background = color;
+        badge.style.color = '#fff';
+        badge.textContent = `Chance: ${label} (${score}%)`;
+    }
+
+    function updateUI() {
+        updateNumberStyles();
+        updateSum();
+    }
+
+    // adicionar listeners para atualizar enquanto o usuário digita
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('.numero-input');
+        inputs.forEach(inp => inp.addEventListener('input', updateUI));
+        // update once on load (covers when predicao or sugestao já preenchidos)
+        updateUI();
+    });
+</script>
+{% endblock %}

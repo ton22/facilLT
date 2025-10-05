@@ -1,0 +1,214 @@
+{% extends "layout.html" %}
+{% block title %}Histórico de Predições{% endblock %}
+{% block page_title %}Histórico de Predições{% endblock %}
+{% block mobile_title %}Histórico{% endblock %}
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fa fa-history text-primary"></i> Histórico de Predições</h5>
+            <div class="dropdown d-md-none">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa fa-download"></i> Exportar
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='csv') }}"><i class="fa fa-file-csv text-success"></i> CSV</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='xlsx') }}"><i class="fa fa-file-excel text-primary"></i> Excel</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='txt') }}"><i class="fa fa-file-alt text-secondary"></i> Texto</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="d-none d-md-block mb-3">
+            <div class="btn-group">
+                <a href="{{ url_for('exportar_predicoes', formato='csv') }}" class="btn btn-outline-success"><i class="fa fa-file-csv"></i> Exportar CSV</a>
+                <a href="{{ url_for('exportar_predicoes', formato='xlsx') }}" class="btn btn-outline-primary"><i class="fa fa-file-excel"></i> Exportar XLSX</a>
+                <a href="{{ url_for('exportar_predicoes', formato='txt') }}" class="btn btn-outline-secondary"><i class="fa fa-file-alt"></i> Exportar TXT</a>
+            </div>
+        </div>
+
+        {% if registros.items %}
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="d-none d-md-table-cell">ID</th>
+                        <th>Data</th>
+                        <th>Números</th>
+                        <th class="d-none d-md-table-cell">Pontuação</th>
+                        <th class="d-none d-lg-table-cell">Soma</th>
+                        <th class="d-none d-lg-table-cell">Primos</th>
+                        <th class="d-none d-lg-table-cell">Pares</th>
+                        <th class="d-none d-lg-table-cell">Ímpares</th>
+                        <th>Chance</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in registros.items %}
+                    <tr>
+                        <td class="d-none d-md-table-cell">{{ r.id }}</td>
+                        <td>{{ r.data }}</td>
+                        <td>
+                            <span class="d-none d-md-inline">{{ r.numeros }}</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary d-md-none" data-bs-toggle="modal" data-bs-target="#numerosModal{{ r.id }}">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            
+                            <!-- Modal para visualizar números em dispositivos móveis -->
+                            <div class="modal fade" id="numerosModal{{ r.id }}" tabindex="-1" aria-labelledby="numerosModalLabel{{ r.id }}" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="numerosModalLabel{{ r.id }}">Detalhes da Predição #{{ r.id }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <strong>Números:</strong> {{ r.numeros }}
+                                            </div>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center">
+                                                        <small class="text-muted d-block">Pontuação</small>
+                                                        <strong>{{ r.pontuacao }}</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center">
+                                                        <small class="text-muted d-block">Soma</small>
+                                                        <strong>{{ r.soma if r.soma is not none else '-' }}</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center">
+                                                        <small class="text-muted d-block">Primos</small>
+                                                        <strong>{{ r.primos if r.primos is not none else '-' }}</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center">
+                                                        <small class="text-muted d-block">Pares</small>
+                                                        <strong>{{ r.pares if r.pares is not none else '-' }}</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center">
+                                                        <small class="text-muted d-block">Ímpares</small>
+                                                        <strong>{{ r.impares if r.impares is not none else '-' }}</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 text-center bg-light">
+                                                        <small class="text-muted d-block">Chance</small>
+                                                        <strong class="text-primary">{{ (r.chance_media|round(0)) if r.chance_media is not none else '-' }}%</strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="d-none d-md-table-cell">{{ r.pontuacao }}</td>
+                        <td class="d-none d-lg-table-cell">{{ r.soma if r.soma is not none else '-' }}</td>
+                        <td class="d-none d-lg-table-cell">{{ r.primos if r.primos is not none else '-' }}</td>
+                        <td class="d-none d-lg-table-cell">{{ r.pares if r.pares is not none else '-' }}</td>
+                        <td class="d-none d-lg-table-cell">{{ r.impares if r.impares is not none else '-' }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if r.chance_media and r.chance_media > 70 else 'warning' if r.chance_media and r.chance_media > 40 else 'danger' }}">
+                                {{ (r.chance_media|round(0)) if r.chance_media is not none else '-' }}%
+                            </span>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('excluir_predicao', id=r.id) }}" method="post" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta predição?');">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </form>
+                            <form action="{{ url_for('enviar_para_bolao', predicao_id=r.id) }}" method="post" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <select name="bolao_id" class="form-select form-select-sm d-inline w-auto">
+                                    {% for b in BolaosQuery if BolaosQuery %}
+                                    <option value="{{ b.id }}">{{ b.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-primary" {% if r.enviado %}disabled{% endif %}>
+                                    <i class="fa fa-share"></i> Enviar p/ Bolão
+                                </button>
+                            </form>
+                            {% if r.enviado %}
+                                <span class="badge bg-secondary ms-1">Enviado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fa fa-info-circle"></i> Nenhuma predição realizada ainda.
+        </div>
+        {% endif %}
+        
+        <!-- Controles de Paginação -->
+        {% if registros.pages > 1 %}
+        <nav aria-label="Navegação de páginas" class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if registros.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('historico', page=registros.prev_num) }}">
+                        <i class="fa fa-chevron-left"></i> Anterior
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for page_num in registros.iter_pages() %}
+                    {% if page_num %}
+                        {% if page_num != registros.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('historico', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if registros.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('historico', page=registros.next_num) }}">
+                        Próxima <i class="fa fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+    <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary"><i class="fa fa-arrow-left"></i> Voltar</a>
+            {% if registros.items %}
+            <small class="text-muted">
+                Mostrando {{ registros.per_page * (registros.page - 1) + 1 }} - 
+                {{ registros.per_page * (registros.page - 1) + registros.items|length }} 
+                de {{ registros.total }} predições
+            </small>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

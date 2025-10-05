@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block title %}Painel do Administrador{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="fa fa-crown"></i> Painel do Administrador</h2>
+
+<h4 class="mt-4">Usuários pendentes de aprovação</h4>
+{% if pendentes %}
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in pendentes %}
+        <tr>
+            <td>{{ u.nome }}</td>
+            <td>
+                <form action="{{ url_for('aprovar', id=u.id) }}" method="post" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-success btn-sm"><i class="fa fa-check"></i> Aprovar</button>
+                </form>
+                <form action="{{ url_for('excluir', id=u.id) }}" method="post" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Excluir usuário?');"><i class="fa fa-trash"></i> Excluir</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum usuário pendente.</p>
+{% endif %}
+
+<h4 class="mt-5">Usuários aprovados</h4>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in aprovados %}
+        <tr>
+            <td>{{ u.nome }}</td>
+            <td>{{ u.tipo }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<hr/>
+<h4 class="mt-4">Bolões</h4>
+<form action="{{ url_for('criar_bolao') }}" method="post" class="row g-2 mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="col-md-4">
+        <input class="form-control" name="nome" placeholder="Nome do bolão" required>
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" name="numero_concurso" placeholder="Número do concurso">
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" name="data_sorteio" placeholder="Data sorteio (YYYY-MM-DD)">
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100" type="submit"><i class="fa fa-plus"></i> Criar Bolão</button>
+    </div>
+    </form>
+
+{% if bolaos %}
+<div class="list-group">
+    {% for b in bolaos %}
+    <a href="{{ url_for('detalhe_bolao', bolao_id=b.id) }}" class="list-group-item list-group-item-action">
+        <strong>{{ b.nome }}</strong> — Concurso: {{ b.numero_concurso or '-' }} — Data: {{ b.data_sorteio or '-' }} — Status: {{ b.status }}
+    </a>
+    {% endfor %}
+    </div>
+{% else %}
+<p class="text-muted">Nenhum bolão criado ainda.</p>
+{% endif %}
+
+<a href="{{ url_for('index') }}" class="btn btn-secondary mt-3"><i class="fa fa-arrow-left"></i> Voltar</a>
+{% endblock %}

@@ -1,0 +1,11 @@
+flask
+scikit-learn
+pandas
+numpy
+tensorflow
+joblib
+openpyxl
+flask_sqlalchemy
+xlsxwriter
+flask-wtf
+flask-migrate

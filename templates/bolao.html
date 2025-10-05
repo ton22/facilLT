@@ -1,0 +1,136 @@
+{% extends "layout.html" %}
+{% block title %}Bolão{% endblock %}
+{% block content %}
+<h2 class="mb-3"><i class="fa fa-users"></i> Meus Bolões</h2>
+
+<div class="row mb-3">
+  {% for p in participacoes %}
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="card-title mb-1">{{ p.bolao.nome }}</h5>
+            <div class="small text-muted">Concurso: {{ p.bolao.numero_concurso or '-' }} • Status: <span class="badge {{ 'bg-success' if p.bolao.status=='aberto' else 'bg-secondary' }}">{{ p.bolao.status }}</span></div>
+            <div class="small text-muted">Participantes: {{ p.participantes }}</div>
+          </div>
+        </div>
+        {% if p.total_por_faixa %}
+        <hr/>
+        <div class="row text-center">
+          {% for faixa in ['11','12','13','14','15'] %}
+          <div class="col">
+            <div class="small text-muted">{{ faixa }} pts</div>
+            <div class="fw-bold">{{ p.total_por_faixa.get(faixa, 0) }}</div>
+            <div class="small">R$ {{ '%.2f'|format(p.por_participante.get(faixa, 0)) }}/participante</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">Convites</div>
+      <div class="card-body">
+        {% if convites %}
+        <ul class="list-group">
+          {% for c in convites %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Bolão #{{ c.bolao_id }} — Status: {{ c.status }} — Jogos permitidos: {{ c.jogos_permitidos }}
+            {% if c.status == 'pendente' %}
+            <form method="post" action="{{ url_for('aceitar_convite', bolao_id=c.bolao_id) }}" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button class="btn btn-sm btn-success">Aceitar</button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Nenhum convite.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">Meus Jogos no Bolão</div>
+      <div class="card-body">
+        {% if jogos %}
+        <table class="table table-sm">
+          <thead><tr><th>ID</th><th>Bolão</th><th>Números</th><th>Pontos</th></tr></thead>
+          <tbody>
+          {% for j in jogos %}
+            <tr>
+              <td>{{ j.id }}</td>
+              <td>{{ j.bolao_id }}</td>
+              <td>{{ j.numeros_json }}</td>
+              <td>{{ j.pontos if j.pontos is not none else '-' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">Você ainda não enviou jogos para bolões.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Enviar jogo manual para um Bolão</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('enviar_para_bolao', predicao_id=0) }}" onsubmit="return validarSelecao15();">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="row g-3 align-items-center">
+        <div class="col-md-3">
+          <label class="form-label">Bolão</label>
+          <select class="form-select" name="bolao_id">
+            {% for b in bolaos %}
+            <option value="{{ b.id }}">{{ b.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-9">
+          <label class="form-label">Escolha 15 números</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for n in range(1,26) %}
+            <label class="btn btn-outline-primary rounded-circle" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+              <input type="checkbox" name="num_{{n}}" value="{{n}}" class="btn-check" autocomplete="off">
+              <span>{{ n }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <small class="text-muted">Selecione exatamente 15 números.</small>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary"><i class="fa fa-paper-plane"></i> Enviar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function validarSelecao15() {
+  var marcados = 0;
+  for (var i = 1; i <= 25; i++) {
+    var el = document.querySelector('input[name="num_' + i + '"]');
+    if (el && el.checked) marcados++;
+  }
+  if (marcados !== 15) {
+    alert('Selecione exatamente 15 números. Você selecionou ' + marcados + '.');
+    return false;
+  }
+  return true;
+}
+</script>
+{% endblock %}
+

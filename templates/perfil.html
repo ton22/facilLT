@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}Perfil do Usuário{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="fa fa-user"></i> Perfil do Usuário</h2>
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">{{ usuario.nome }}</h5>
+        <p class="card-text"><strong>Tipo:</strong> {{ usuario.tipo }}</p>
+        <p class="card-text"><strong>Status:</strong> {% if usuario.aprovado %}<span class="badge bg-success">Aprovado</span>{% else %}<span class="badge bg-warning">Pendente</span>{% endif %}</p>
+        <form method="post" action="{{ url_for('alterar_senha') }}">
+            <div class="mb-3">
+                <label for="nova_senha" class="form-label">Nova senha</label>
+                <input type="password" class="form-control" id="nova_senha" name="nova_senha" required>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fa fa-key"></i> Alterar Senha</button>
+        </form>
+    </div>
+</div>
+{% if mensagem %}
+<div class="alert alert-info mt-3">{{ mensagem }}</div>
+{% endif %}
+{% endblock %}

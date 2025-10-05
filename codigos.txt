@@ -1,0 +1,15 @@
+python
+
+
+
+from models import db, Usuario
+from app import app
+
+with app.app_context():
+    admin = Usuario(nome="admin", senha="admin123", tipo="admin", aprovado=True)
+    db.session.add(admin)
+    db.session.commit()
+
+
+
+exit()

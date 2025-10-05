@@ -1,0 +1,100 @@
+# MELHORIAS PROPOSTAS E IMPLEMENTADAS
+
+## 1. SEGURANÇA
+
+### Problemas Identificados:
+- Chave secreta hardcoded no código
+- Tamanho do campo de senha insuficiente para hashes modernos
+- Falta de campos para auditoria de usuários
+- Ausência de proteção contra CSRF
+
+### Ações Tomadas:
+- Substituição da chave secreta hardcoded por variável de ambiente ou geração aleatória (já vigente)
+- Aumento do tamanho do campo de senha para 256 caracteres (já vigente)
+- Adição de campos de data de criação e último acesso para auditoria (já vigente)
+- Implementação de proteção CSRF nos formulários (ativo com Flask-WTF)
+- Inclusão de tokens CSRF nos formulários de login, exclusão de predições e ações de admin (aprovar/excluir)
+- Endurecimento de sessão: `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SECURE` (em produção), `SESSION_COOKIE_SAMESITE='Lax'`, `PERMANENT_SESSION_LIFETIME=1h`
+- Ações destrutivas convertidas para POST com CSRF (excluir usuário e excluir predição)
+- Flask-Migrate integrado ao app (substituir gradualmente alterações de schema em runtime)
+
+## 2. DESEMPENHO
+
+### Problemas Identificados:
+- Função compute_stats chamada repetidamente sem cache
+- Rastreamento de modificações do SQLAlchemy ativado desnecessariamente
+- Consultas não paginadas para grandes conjuntos de dados
+
+### Ações Tomadas:
+- Implementação de cache com lru_cache na função `compute_stats`
+- Invalidação automática do cache após salvar/excluir predição e após treinamento
+- Desativação do rastreamento de modificações do SQLAlchemy
+- Implementação de paginação nas consultas de histórico
+
+## 3. ORGANIZAÇÃO DO CÓDIGO
+
+### Problemas Identificados:
+- Código monolítico com todas as rotas em um único arquivo
+- Mistura de lógica de negócio com código de rotas
+- Falta de separação de responsabilidades
+
+### Ações Tomadas:
+- Registro do Blueprint de autenticação (`blueprints/auth.py`) e remoção das rotas duplicadas de login/cadastro/logout do `app.py`
+- Centralização da geração de estatísticas em `compute_stats()` e remoção de duplicações no `index`
+- Limpeza de código morto e blocos residuais no `app.py`
+- Em andamento: extrair serviço de estatísticas e treinamentos para `services/` e adotar app factory
+
+## 4. EXPERIÊNCIA DO USUÁRIO
+
+### Problemas Identificados:
+- Falta de feedback visual para ações do usuário
+- Ausência de validação de formulários no lado do cliente
+- Interface não responsiva em alguns componentes
+
+### Ações Tomadas:
+- Ajuste seguro de sessão nos templates: uso de `session.get()` para evitar erros quando a chave não existe
+- Formulários de ações administrativas com confirmação e CSRF
+- (Mantidos) Layout responsivo, exportações (CSV/XLSX/TXT) e feedback de erros
+
+## 6. NOVAS FUNCIONALIDADES — BOLÃO
+
+### Implementado:
+- Modelos: `Bolao`, `ConviteBolao`, `BolaoJogo` e flag `Predicao.enviado`.
+- Admin:
+  - Criar bolão (nome, número do concurso, data do sorteio).
+  - Tela de detalhe do bolão para inserir resultado do concurso e valores a pagar por faixa (11–15 pontos).
+  - Recalcular automaticamente pontos dos jogos e somatórios/valores por faixa.
+  - Enviar convites para usuários do app participarem do bolão e definir jogos permitidos.
+- Usuário:
+  - Página "Bolão" para ver convites, aceitar convite, ver jogos enviados.
+  - Enviar jogo manual para um bolão com seletor visual (1..25, botões redondos) exigindo exatamente 15 números.
+  - Validação client-side para travar envio se ≠ 15 selecionados; mensagens de sucesso/aviso.
+- Histórico:
+  - Botão "Enviar p/ Bolão" em cada predição; ao enviar, o status do jogo muda para "Enviado".
+
+### Observações/Tarefas futuras:
+- Melhorar UX dos convites (auto-completar usuários, estados do convite).
+- Restringir lista de bolões visíveis ao usuário de acordo com convite/participação.
+- Exportar relatório do bolão com distribuição por faixas e totais de prêmio.
+- Flash messages nas páginas para feedback (limite atingido, bolão fechado, seleção inválida) — implementado no layout.
+- Fechamento automático do bolão após lançamento de resultado/valores e bloqueio de novas edições/envios.
+
+## 5. MANUTENÇÃO
+
+### Problemas Identificados:
+- Ausência de testes automatizados
+- Falta de logging estruturado
+- Documentação insuficiente
+
+### Ações Tomadas:
+- Logging configurado (arquivo `app.log` + console)
+- Comentários e limpeza de trechos duplicados para facilitar manutenção
+- Em andamento: testes com pytest e integração de Flask-Migrate; normalização do campo `Predicao.numeros` para JSON com `numeros_json` (leitura/escrita compatíveis; migração de dados pendente)
+
+---
+
+Resumo das mudanças aplicadas agora:
+- Sessão endurecida e uso seguro nos templates (`layout.html`)
+- Exclusões via POST com CSRF em `admin.html` e `historico.html`
+- `app.py`: remoção de rotas duplicadas de autenticação; registro do blueprint `auth`; centralização das estatísticas no `index`; invalidação de cache após gravações; remoção de código duplicado e bloco residual; cookies e lifetime ajustados
+- Próximos passos: adicionar Flask-Migrate, mover lógicas para `services/`, e migrar `Predicao.numeros` para JSON com validação
