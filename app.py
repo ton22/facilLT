@@ -265,12 +265,12 @@ def compute_stats(cache_key=None):
                 if isinstance(parsed, (list, tuple)):
                     nums = list(parsed)
                 else:
-                nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
-        except Exception:
-            try:
-                nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
+                    nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
             except Exception:
-                nums = []
+                try:
+                    nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
+                except Exception:
+                    nums = []
         nums = [int(x) for x in nums] if nums else []
         if not nums:
             continue
@@ -469,7 +469,7 @@ def exportar_predicoes():
 def aprovar(id):
     usuario = Usuario.query.get(id)
     if usuario:
-    usuario.aprovado = True
+       usuario.aprovado = True
     db.session.commit()
     return redirect(url_for('painel_admin'))
 
@@ -770,8 +770,8 @@ def enviar_para_bolao(predicao_id):
 def excluir(id):
     usuario = Usuario.query.get(id)
     if usuario:
-    db.session.delete(usuario)
-    db.session.commit()
+        db.session.delete(usuario)
+        db.session.commit()
         try:
             compute_stats.cache_clear()
         except Exception:
@@ -848,16 +848,16 @@ def admin_dashboard():
             else:
                 raise Exception('no json')
         except Exception:
-        try:
-            nums = ast.literal_eval(p.numeros)
-            # if stored as string with commas but not list, attempt split
-            if not isinstance(nums, (list, tuple)):
-                nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
-        except Exception:
             try:
-                nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
+                nums = ast.literal_eval(p.numeros)
+                # if stored as string with commas but not list, attempt split
+                if not isinstance(nums, (list, tuple)):
+                    nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
             except Exception:
-                nums = []
+                try:
+                    nums = [int(x) for x in str(p.numeros).strip('[]').split(',') if x.strip()]
+                except Exception:
+                    nums = []
         # normalize and validate: must be exactly 15 integers in 1..25
         try:
             nums = [int(x) for x in nums]
