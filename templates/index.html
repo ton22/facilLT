@@ -45,7 +45,20 @@
                     <h5 class="card-title"><i class="fa fa-history"></i> Últimas Predições</h5>
                     <ul class="list-group">
                         {% for p in ultimas_predicoes %}
-                            <li class="list-group-item">{{ p.numeros }} - Pontuação: {{ p.pontuacao }}</li>
+                            <li class="list-group-item">
+                                <div class="d-none d-md-block">
+                                    <span class="numbers-copy" data-copy="{{ p.numeros|numeros_fmt }}" title="Clique para copiar">{{ p.numeros|numeros_fmt }}</span>
+                                    <span class="ms-1">- Pontuação: {{ p.pontuacao }}</span>
+                                </div>
+                                <div class="d-block d-md-none">
+                                    <div class="chips numbers-copy" data-copy="{{ p.numeros|numeros_fmt }}" title="Toque para copiar">
+                                        {% for n in p.numeros|numeros_list %}
+                                        <span class="chip">{{ n }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="small text-muted mt-1">Pontuação: {{ p.pontuacao }}</div>
+                                </div>
+                            </li>
                         {% else %}
                             <li class="list-group-item">Nenhuma predição recente.</li>
                         {% endfor %}
@@ -57,19 +70,14 @@
 
     <div class="row mb-4">
         <div class="col-lg-8 mx-auto">
-                                            {% if user_type == 'admin' %}
-                                            <form action="/treinar" method="post" onsubmit="showLoading('treinamento')">
+                                                        <form id="predicaoForm" action="/predicao" method="post" onsubmit="return validarNumeros(event)" data-loading data-loading-text="Fazendo predição...">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                                <button type="submit" class="btn btn-danger mt-2"><i class="fa fa-robot"></i> Executar Treinamento</button>
-                                            </form>
-                                            {% endif %}
-            <form action="/predicao" method="post" onsubmit="return validarNumeros()">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="d-flex flex-wrap justify-content-center">
+                <div class="d-flex flex-wrap justify-content-center" id="numero-inputs-container">
                     {% for i in range(1, 16) %}
                         <input type="number" name="numero{{ i }}" class="numero-input" min="1" max="25" required style="appearance: none;">
                     {% endfor %}
                 </div>
+                <div id="validation-feedback" class="alert alert-danger mt-2" style="display: none;"></div>
                 <div class="text-center mt-2">
                     {% if predicao_chance_label is defined and predicao_chance_score is not none %}
                         <span id="soma-display" class="badge bg-secondary">Soma: {{ predicao_soma }}</span>
@@ -84,18 +92,35 @@
                     <div class="item"><span class="swatch swatch-par"></span><small>Par</small></div>
                     <div class="item"><span class="swatch swatch-impar"></span><small>Ímpar</small></div>
                 </div>
-                <button type="button" class="btn btn-success mt-3" onclick="gerarSugestao()"><i class="fa fa-bolt"></i> Sugestão Automática</button>
-                <button type="submit" class="btn btn-primary mt-3 ms-2"><i class="fa fa-search"></i> Fazer Predição</button>
-            </form>
-            <div id="loading" class="loading alert alert-info">
+                </form>
+            <div class="d-flex justify-content-center flex-wrap gap-2 mt-3">
+                <button type="button" class="btn btn-success" onclick="gerarSugestao()" id="btn-sugestao"><i class="fa fa-bolt"></i> Sugestão Automática</button>
+                <button type="submit" class="btn btn-primary" form="predicaoForm" id="btn-predicao"><i class="fa fa-search"></i> Fazer Predição</button>
+                {% if user_type == 'admin' %}
+                <form action="/treinar" method="post" class="m-0" data-loading data-loading-text="Executando treinamento do modelo...">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-outline-danger"><i class="fa fa-robot"></i> Executar Treinamento</button>
+                </form>
+                {% endif %}
+            </div>
+            <div id="loading" class="loading alert alert-info" style="display: none;">
                 <i class="fa fa-spinner fa-spin"></i> Processando... Por favor, aguarde.
             </div>
             {% if mensagem %}
                 <div class="alert alert-success mt-3">{{ mensagem }}</div>
             {% endif %}
+            {% if erro %}
+                <div class="alert alert-danger mt-3">{{ erro }}</div>
+            {% endif %}
             {% if predicao %}
                 <div id="predicao-block" class="alert alert-secondary mt-3">
-                    <strong>Números previstos:</strong> {{ predicao.numeros }}<br>
+                    <strong>Números previstos:</strong>
+                    <div class="chips numbers-copy mt-1" data-copy="{{ predicao.numeros|numeros_fmt }}" title="Toque para copiar">
+                        {% for n in predicao.numeros|numeros_list %}
+                        <span class="chip">{{ n }}</span>
+                        {% endfor %}
+                    </div>
+                    <br>
                     <strong>Pontuação estimada:</strong> {{ predicao.pontuacao }}<br>
                     {% if predicao_chance_label is defined and predicao_chance_score is not none %}
                         <div class="mt-2">
@@ -169,50 +194,147 @@
 <script>
     // server-provided stats for heatmap (injected as JSON)
     const SERVER_STATS = {{ stats|tojson|safe }};
-    function showLoading(tipo) {
-        document.getElementById("loading").style.display = "block";
+    const loadingEl = document.getElementById("loading");
+    const validationFeedbackEl = document.getElementById("validation-feedback");
+
+    function showLoading(text = 'Processando...') {
+        if (window.UXUtils) {
+            UXUtils.showLoading(text);
+        } else {
+            loadingEl.style.display = "block";
+        }
     }
-    function validarNumeros() {
+
+    function hideLoading() {
+        if (window.UXUtils) {
+            UXUtils.hideLoading();
+        } else {
+            loadingEl.style.display = "none";
+        }
+    }
+
+    function showValidationFeedback(message) {
+        if (window.UXUtils) {
+            UXUtils.showToast(message, 'error');
+        } else {
+            validationFeedbackEl.textContent = message;
+            validationFeedbackEl.style.display = "block";
+        }
+    }
+
+    function hideValidationFeedback() {
+        validationFeedbackEl.style.display = "none";
+    }
+
+    function validarNumeros(event) {
         const inputs = document.querySelectorAll(".numero-input");
         const valores = Array.from(inputs).map(input => parseInt(input.value));
         const unicos = new Set(valores);
-        if (valores.length !== 15 || unicos.size !== 15 || valores.some(v => v < 1 || v > 25)) {
-            alert("Digite 15 números únicos entre 1 e 25.");
+        let isValid = true;
+        let errorMessage = "";
+
+        // Clear previous feedback
+        hideValidationFeedback();
+        inputs.forEach(input => {
+            input.classList.remove('is-invalid', 'field-error');
+            // Remove existing feedback messages
+            const feedback = input.parentNode.querySelector('.invalid-feedback, .error-message');
+            if (feedback) feedback.remove();
+        });
+
+        if (valores.length !== 15) {
+            errorMessage = "Por favor, preencha todos os 15 números.";
+            isValid = false;
+        } else if (unicos.size !== 15) {
+            errorMessage = "Os números devem ser únicos.";
+            isValid = false;
+            // Highlight duplicate numbers
+            const counts = {};
+            valores.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+            inputs.forEach(input => {
+                if (counts[parseInt(input.value)] > 1) {
+                    if (window.UXUtils) {
+                        UXUtils.validateField(input, false, 'Número duplicado');
+                    } else {
+                        input.classList.add('is-invalid');
+                    }
+                }
+            });
+        } else if (valores.some(v => v < 1 || v > 25 || isNaN(v))) {
+            errorMessage = "Todos os números devem estar entre 1 e 25.";
+            isValid = false;
+            inputs.forEach(input => {
+                const v = parseInt(input.value);
+                if (v < 1 || v > 25 || isNaN(v)) {
+                    if (window.UXUtils) {
+                        UXUtils.validateField(input, false, 'Número deve estar entre 1 e 25');
+                    } else {
+                        input.classList.add('is-invalid');
+                    }
+                }
+            });
+        }
+
+        if (!isValid) {
+            showValidationFeedback(errorMessage);
+            event.preventDefault(); // Prevent form submission
             return false;
         }
-        showLoading("predicao");
+
+        showLoading();
         return true;
     }
+
     function gerarSugestao() {
+        const btnSugestao = document.getElementById('btn-sugestao');
+        
+        hideValidationFeedback(); // Clear validation feedback when generating suggestion
+        
+        // Set button loading state
+        if (window.UXUtils && btnSugestao) {
+            UXUtils.setButtonLoading(btnSugestao, true);
+        }
+        
+        showLoading('Gerando sugestão automática...'); // Show loading indicator for suggestion generation
+        
         fetch('/sugestao_automatica')
             .then(response => response.json())
             .then(data => {
                 const inputs = document.querySelectorAll('.numero-input');
-                data.numeros.forEach((num, idx) => {
-                    inputs[idx].value = num;
+                inputs.forEach((numInput, idx) => {
+                    numInput.value = data.numeros[idx];
+                    numInput.classList.remove('is-invalid', 'field-error'); // Clear invalid state
+                    // Clear any validation feedback
+                    const feedback = numInput.parentNode.querySelector('.invalid-feedback, .error-message');
+                    if (feedback) feedback.remove();
                 });
-                // Atualiza visual (cores e soma) após preencher sugestão
                 updateUI();
+                
+                // Show success message
+                if (window.UXUtils) {
+                    UXUtils.showToast('Sugestão gerada com sucesso!', 'success');
+                }
+                
+                hideLoading(); // Hide loading after suggestion is applied
+                
+                // Reset button state
+                if (window.UXUtils && btnSugestao) {
+                    UXUtils.setButtonLoading(btnSugestao, false);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao gerar sugestão:', error);
+                hideLoading(); // Hide loading on error
+                
+                // Reset button state
+                if (window.UXUtils && btnSugestao) {
+                    UXUtils.setButtonLoading(btnSugestao, false);
+                }
+                
+                showValidationFeedback("Erro ao gerar sugestão automática. Tente novamente.");
             });
     }
-</script>
 
-<!-- styles moved to static/style.css -->
-<script>
-    function showLoading(tipo) {
-        document.getElementById("loading").style.display = "block";
-    }
-    function validarNumeros() {
-        const inputs = document.querySelectorAll(".numero-input");
-        const valores = Array.from(inputs).map(input => parseInt(input.value));
-        const unicos = new Set(valores);
-        if (valores.length !== 15 || unicos.size !== 15 || valores.some(v => v < 1 || v > 25)) {
-            alert("Digite 15 números únicos entre 1 e 25.");
-            return false;
-        }
-        showLoading("predicao");
-        return true;
-    }
     // UTIL: verifica primo
     function isPrime(n) {
         if (!n || n < 2) return false;
@@ -252,8 +374,8 @@
         if (!valores || valores.length !== 15 || valores.some(v => v <= 0)) {
             badge.style.background = '#e0e0e0'; badge.textContent = 'Chance: -'; return;
         }
-    // server stats (injected)
-    const stats = SERVER_STATS || {sum_range_counts:[], most_common_primes:[], most_common_evens:[], prime_number_list:[]};
+        // server stats (injected)
+        const stats = SERVER_STATS || {sum_range_counts:[], most_common_primes:[], most_common_evens:[], prime_number_list:[]};
         // score components:
         // 1) sum range alignment: if soma falls in one of the top ranges -> +40
         let sum_score = 0;
@@ -313,5 +435,30 @@
         // update once on load (covers when predicao or sugestao já preenchidos)
         updateUI();
     });
+</script>
+
+<script>
+// Copiar números ao tocar/clicar em um bloco com class "numbers-copy"
+(function(){
+  function copyText(txt){
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { return navigator.clipboard.writeText(txt); } } catch(e) {}
+    return new Promise(function(resolve,reject){
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject();
+      } catch(e){ reject(e); }
+    });
+  }
+  document.addEventListener('click', function(ev){
+    var el = ev.target.closest('.numbers-copy');
+    if(!el) return;
+    var txt = el.getAttribute('data-copy') || el.innerText || '';
+    copyText(txt).then(function(){ alert('Números copiados'); }).catch(function(){ alert('Não foi possível copiar'); });
+  });
+})();
 </script>
 {% endblock %}

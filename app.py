@@ -65,7 +65,112 @@ except Exception:
     # Se blueprint não puder ser importado, seguir com rotas locais
     pass
 
+# Filtros de template para formatação consistente (datas e números)
+from datetime import datetime as _dt
+import json as _json
+import ast as _ast
+import re as _re
 
+
+def _parse_numeros(val):
+    try:
+        if val is None:
+            return []
+        if isinstance(val, (list, tuple)):
+            return [int(x) for x in val]
+        s = str(val).strip()
+        # tentar JSON de lista
+        try:
+            if s.startswith('[') and s.endswith(']'):
+                obj = _json.loads(s)
+                if isinstance(obj, list):
+                    return [int(x) for x in obj]
+        except Exception:
+            pass
+        # tentar literal_eval de lista/tupla
+        try:
+            obj = _ast.literal_eval(s)
+            if isinstance(obj, (list, tuple)):
+                return [int(x) for x in obj]
+        except Exception:
+            pass
+        # fallback: extrair dígitos separados
+        nums = [int(x) for x in _re.findall(r'\d+', s)]
+        return nums
+    except Exception:
+        return []
+
+
+@app.template_filter('numeros_fmt')
+def numeros_fmt(val):
+    """Formata sequência de números removendo colchetes e vírgulas, separados por hífen."""
+    nums = _parse_numeros(val)
+    if nums:
+        return ' - '.join(str(n) for n in nums)
+    # fallback textual simples
+    try:
+        s = str(val)
+        s = s.replace('[', '').replace(']', '').replace(',', ' - ')
+        s = _re.sub(r'\s+', ' ', s).strip()
+        return s
+    except Exception:
+        return str(val)
+
+
+@app.template_filter('numeros_list')
+def numeros_list(val):
+    """Retorna a lista de números como lista de inteiros para renderização de chips."""
+    try:
+        lst = _parse_numeros(val)
+        return [int(x) for x in lst]
+    except Exception:
+        return []
+
+
+@app.template_filter('datetime_short')
+def datetime_short(value):
+    """Exibe data no formato dd/mm/aaaa HH:MM (sem segundos/milisegundos)."""
+    try:
+        if hasattr(value, 'strftime'):
+            return value.strftime('%d/%m/%Y %H:%M')
+        s = str(value)
+        # tentar ISO básico
+        try:
+            # remove milissegundos se presentes
+            base = s.split('.')[0]
+            dt = _dt.fromisoformat(base.replace('Z', ''))
+            return dt.strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            pass
+        # fallback: se houver HH:MM:SS, cortar para HH:MM
+        if 'T' in s or ' ' in s:
+            # manter somente até minutos
+            parts = _re.split(r'[: ]', s)
+            if len(parts) >= 3:
+                # reconstruir mantendo data e HH:MM
+                if 'T' in s:
+                    date_part = s.split('T')[0]
+                else:
+                    date_part = s.split(' ')[0]
+                time_part = parts[1] + ':' + parts[2][:2] if len(parts[2]) >= 2 else parts[1]
+                return f"{date_part} {time_part}"
+        return s
+    except Exception:
+        try:
+            return value.strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            return str(value)
+
+
+@app.template_filter('from_json')
+def from_json(value):
+    """Converte string JSON em objeto Python."""
+    try:
+        if value:
+            return _json.loads(value)
+        return {}
+    except Exception:
+        return {}
 
 
 # Rota de perfil do usuário
@@ -87,7 +192,7 @@ def historico(page=1):
     registros = Predicao.query.filter_by(usuario_id=usuario.id).order_by(
         Predicao.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
     # lista de bolões disponíveis (simples: todos os bolões abertos)
-    bolaos = Bolao.query.order_by(Bolao.criado_em.desc()).all()
+    bolaos = Bolao.query.filter_by(status='aberto').order_by(Bolao.criado_em.desc()).all()
     return render_template('historico.html', registros=registros, BolaosQuery=bolaos)
 
 # Decorator para rotas admin
@@ -109,11 +214,24 @@ def descartar_predicao():
 # Rota para salvar predição manualmente
 @app.route('/salvar_predicao', methods=['POST'])
 def salvar_predicao():
+    from validation import FormValidator, flash_validation_errors
+    
     if 'usuario' not in session:
         return redirect(url_for('auth.login'))
+    
     usuario = Usuario.query.filter_by(nome=session['usuario']).first()
-    numeros = request.form['numeros']
-    pontuacao = request.form['pontuacao']
+    
+    # Validar dados obrigatórios
+    numeros = request.form.get('numeros', '')
+    pontuacao = request.form.get('pontuacao', '')
+    
+    validation_result = FormValidator.validate_required(numeros, "Números")
+    if pontuacao == '':
+        validation_result.add_error("pontuacao", "Pontuação é obrigatória")
+    
+    if not validation_result.is_valid:
+        flash_validation_errors(validation_result)
+        return redirect(url_for('index'))
     # compute derived stats before saving
     try:
         nums = ast.literal_eval(numeros)
@@ -361,14 +479,41 @@ def index():
 
 @app.route('/predicao', methods=['POST'])
 def fazer_predicao():
+    from validation import FormValidator, flash_validation_errors, get_validation_errors_for_template
+    
     sistema = Sistema.query.first()
     if sistema.em_treinamento:
         return render_template('index.html', mensagem="Sistema em treinamento. Tente novamente em breve.", user_type=session.get('tipo'), em_treinamento=True, stats=compute_stats())
 
     try:
-        lista_numeros = [int(request.form[f"numero{i}"]) for i in range(1, 16)]
-        if len(set(lista_numeros)) != 15 or any(n < 1 or n > 25 for n in lista_numeros):
-            raise ValueError("Números inválidos.")
+        # Validar entrada dos números
+        lista_numeros = []
+        for i in range(1, 16):
+            try:
+                numero = int(request.form[f"numero{i}"])
+                lista_numeros.append(numero)
+            except (ValueError, KeyError):
+                validation_result = FormValidator.validate_required("", "Números")
+                validation_result.add_error("numeros", f"Número {i} é inválido ou não foi fornecido")
+                flash_validation_errors(validation_result)
+                return render_template('index.html', 
+                                     mensagem="Erro na validação dos números", 
+                                     user_type=session.get('tipo'), 
+                                     em_treinamento=False, 
+                                     stats=compute_stats(),
+                                     validation_errors=get_validation_errors_for_template(validation_result))
+        
+        # Validar números da Lotofácil
+        validation_result = FormValidator.validate_lotofacil_numbers(lista_numeros)
+        if not validation_result.is_valid:
+            flash_validation_errors(validation_result)
+            return render_template('index.html', 
+                                 mensagem="Números inválidos selecionados", 
+                                 user_type=session.get('tipo'), 
+                                 em_treinamento=False, 
+                                 stats=compute_stats(),
+                                 validation_errors=get_validation_errors_for_template(validation_result))
+        
         # If the user provided numbers (manually or via suggestion), evaluate that exact game
         try:
             pontuacao = predicao.avaliar(lista_numeros)
@@ -523,24 +668,159 @@ def painel_admin():
     bolaos = Bolao.query.order_by(Bolao.criado_em.desc()).all()
     return render_template('admin.html', pendentes=pendentes, aprovados=aprovados, bolaos=bolaos)
 
+# Importar histórico oficial (admin)
+@app.route('/admin/importar_historico', methods=['POST'])
+@admin_required
+def importar_historico():
+    try:
+        f = request.files.get('arquivo')
+        if not f or f.filename == '':
+            flash('Nenhum arquivo enviado.', 'warning')
+            return redirect(url_for('painel_admin'))
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(f.filename)
+        if not filename.lower().endswith('.xlsx'):
+            flash('Formato inválido. Envie um arquivo XLSX.', 'danger')
+            return redirect(url_for('painel_admin'))
+        import io
+        import pandas as pd
+        data = f.read()
+        if not data or len(data) < 100:
+            flash('Arquivo inválido ou vazio.', 'danger')
+            return redirect(url_for('painel_admin'))
+        bio = io.BytesIO(data)
+        # Validar se é um Excel legível e se contém a planilha esperada
+        try:
+            xls = pd.ExcelFile(bio)
+        except Exception as e:
+            app.logger.exception('Falha ao abrir XLSX')
+            flash(f'Arquivo XLSX inválido: {e}', 'danger')
+            return redirect(url_for('painel_admin'))
+        sheet_name = None
+        if any(s.lower() == 'historico' for s in xls.sheet_names):
+            for s in xls.sheet_names:
+                if s.lower() == 'historico':
+                    sheet_name = s
+                    break
+        else:
+            # usar a primeira planilha como fallback
+            sheet_name = xls.sheet_names[0]
+        try:
+            df = xls.parse(sheet_name)
+        except Exception as e:
+            app.logger.exception('Falha ao ler planilha')
+            flash(f'Não foi possível ler a planilha: {e}', 'danger')
+            return redirect(url_for('painel_admin'))
+        # Checar estrutura mínima: colunas Numero 1..15 ou pelo menos 15 valores numéricos por linha
+        expected_cols = [f'Numero {i}' for i in range(1, 16)]
+        has_expected = all(col in df.columns for col in expected_cols)
+        if not has_expected:
+            try:
+                df_numeric = df.apply(pd.to_numeric, errors='coerce')
+                if not (df_numeric.apply(lambda r: r.notna().sum(), axis=1) >= 15).any():
+                    flash('Planilha não contém colunas "Numero 1..15" nem linhas com ao menos 15 números.', 'danger')
+                    return redirect(url_for('painel_admin'))
+            except Exception:
+                flash('Planilha com formato inesperado.', 'danger')
+                return redirect(url_for('painel_admin'))
+        # Salvar atomicamente como historico.xlsx na pasta do app
+        target_path = os.path.join(os.path.dirname(__file__), 'historico.xlsx')
+        tmp_path = target_path + '.tmp'
+        try:
+            with open(tmp_path, 'wb') as out:
+                out.write(data)
+            # substituir o arquivo antigo
+            os.replace(tmp_path, target_path)
+        except Exception:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            app.logger.exception('Falha ao salvar historico.xlsx')
+            flash('Erro ao salvar o arquivo no servidor.', 'danger')
+            return redirect(url_for('painel_admin'))
+        # Atualizar Sistema.ultimo_concurso se possível
+        try:
+            sistema = Sistema.query.first()
+            if sistema is None:
+                sistema = Sistema(em_treinamento=False)
+                db.session.add(sistema)
+                db.session.commit()
+            concurso_col = None
+            for col in df.columns:
+                cname = str(col).strip().lower()
+                if cname in ['concurso', 'concurso numero', 'n concurso', 'nº concurso', 'nº']:
+                    concurso_col = col
+                    break
+            if concurso_col is not None:
+                last = df[concurso_col].dropna()
+                if len(last) > 0:
+                    sistema.ultimo_concurso = str(last.iloc[-1])
+                    db.session.commit()
+        except Exception:
+            # não interromper por falha de metadados
+            pass
+        # Registrar log de importação
+        try:
+            app.logger.info('Importação historico.xlsx por "%s": sheet=%s linhas=%s colunas=%s',
+                            session.get('usuario'), sheet_name, len(df), list(map(str, df.columns))[:10])
+        except Exception:
+            pass
+        flash('Arquivo importado com sucesso.', 'success')
+        return redirect(url_for('painel_admin'))
+    except Exception as e:
+        app.logger.exception('Erro inesperado na importação do historico.xlsx')
+        flash(f'Erro inesperado na importação: {e}', 'danger')
+        return redirect(url_for('painel_admin'))
+
 # Criar bolão (admin)
 @app.route('/admin/bolao/criar', methods=['POST'])
 @admin_required
 def criar_bolao():
-    nome = request.form.get('nome')
-    numero_concurso = request.form.get('numero_concurso')
-    data_sorteio = request.form.get('data_sorteio')
+    from validation import FormValidator, flash_validation_errors
+    
+    nome = request.form.get('nome', '')
+    numero_concurso = request.form.get('numero_concurso', '')
+    data_sorteio = request.form.get('data_sorteio', '')
+    
+    # Validar dados do bolão
+    validation_result = FormValidator.validate_bolao_name(nome)
+    
+    # Validar número do concurso se fornecido
+    contest_validation = FormValidator.validate_contest_number(numero_concurso)
+    if not contest_validation.is_valid:
+        validation_result.errors.extend(contest_validation.errors)
+        validation_result.is_valid = False
+    
+    # Validar data se fornecida
+    date_validation = FormValidator.validate_date_format(data_sorteio, "Data do sorteio")
+    if not date_validation.is_valid:
+        validation_result.errors.extend(date_validation.errors)
+        validation_result.is_valid = False
+    
+    if not validation_result.is_valid:
+        flash_validation_errors(validation_result)
+        return redirect(url_for('painel_admin'))
+    
     from datetime import datetime as _dt
     dt = None
     try:
-        if data_sorteio:
-            dt = _dt.fromisoformat(data_sorteio)
+        if data_sorteio and data_sorteio.strip():
+            dt = _dt.fromisoformat(data_sorteio.strip())
     except Exception:
         dt = None
-    bolao = Bolao(nome=nome, numero_concurso=numero_concurso, data_sorteio=dt, criado_por=Usuario.query.filter_by(nome=session['usuario']).first().id)
-    db.session.add(bolao)
-    db.session.commit()
-    return redirect(url_for('detalhe_bolao', bolao_id=bolao.id))
+    
+    try:
+        bolao = Bolao(nome=nome.strip(), numero_concurso=numero_concurso.strip() if numero_concurso else None, 
+                     data_sorteio=dt, criado_por=Usuario.query.filter_by(nome=session['usuario']).first().id)
+        db.session.add(bolao)
+        db.session.commit()
+        flash('Bolão criado com sucesso!', 'success')
+        return redirect(url_for('detalhe_bolao', bolao_id=bolao.id))
+    except Exception as e:
+        flash(f'Erro ao criar bolão: {str(e)}', 'error')
+        return redirect(url_for('painel_admin'))
 
 # Detalhe/gerência de bolão (admin)
 @app.route('/admin/bolao/<int:bolao_id>', methods=['GET', 'POST'])
@@ -617,13 +897,22 @@ def detalhe_bolao(bolao_id):
 @app.route('/admin/bolao/<int:bolao_id>/convidar', methods=['POST'])
 @admin_required
 def convidar_para_bolao(bolao_id):
+    bolao = Bolao.query.get_or_404(bolao_id)
+    # Não permitir convites em bolões finalizados
+    if bolao.status == 'fechado':
+        flash('Não é possível convidar usuários para bolões finalizados.', 'error')
+        return redirect(url_for('detalhe_bolao', bolao_id=bolao_id))
+    
     usuario_nome = request.form.get('usuario')
-    jogos_permitidos = int(request.form.get('jogos_permitidos') or 1)
+    jogos_permitidos = int(request.form.get('jogos_permitidos', 1))
     usuario = Usuario.query.filter_by(nome=usuario_nome).first()
     if usuario:
         convite = ConviteBolao(bolao_id=bolao_id, usuario_id=usuario.id, jogos_permitidos=jogos_permitidos)
         db.session.add(convite)
         db.session.commit()
+        flash('Convite enviado com sucesso!', 'success')
+    else:
+        flash('Usuário não encontrado.', 'error')
     return redirect(url_for('detalhe_bolao', bolao_id=bolao_id))
 
 # Página Bolão (usuário)
@@ -633,8 +922,9 @@ def pagina_bolao():
         return redirect(url_for('auth.login'))
     usuario = Usuario.query.filter_by(nome=session['usuario']).first()
     convites = ConviteBolao.query.filter_by(usuario_id=usuario.id).all()
-    jogos = BolaoJogo.query.filter_by(usuario_id=usuario.id).all()
-    # bolões abertos para envio manual
+    # Meus jogos (mantido apenas para contagem, mas a listagem principal exibirá jogos do bolão ativo)
+    meus_jogos = BolaoJogo.query.filter_by(usuario_id=usuario.id).all()
+    # bolões abertos para envio manual (dropdown)
     bolaos_abertos = Bolao.query.filter_by(status='aberto').all()
     # montar resumos por bolão que o usuário participa (convite aceito)
     import json
@@ -667,7 +957,23 @@ def pagina_bolao():
             'por_participante': por_participante,
             'convite': c
         })
-    return render_template('bolao.html', convites=convites, jogos=jogos, bolaos=bolaos_abertos, participacoes=participacoes)
+    # identificar bolão ativo (aberto) em que o usuário participa (convite aceito mais recente)
+    from datetime import datetime as _dt, timedelta as _td
+    boloes_ativos_usuario = []
+    for c in convites:
+        if c.status != 'aceito':
+            continue
+        b = Bolao.query.get(c.bolao_id)
+        if b and b.status == 'aberto':
+            boloes_ativos_usuario.append(b)
+    bolao_ativo = None
+    if boloes_ativos_usuario:
+        # escolher o mais recente por criado_em
+        boloes_ativos_usuario.sort(key=lambda x: x.criado_em or _dt.min, reverse=True)
+        bolao_ativo = boloes_ativos_usuario[0]
+    jogos_bolao_ativo = BolaoJogo.query.filter_by(bolao_id=bolao_ativo.id).all() if bolao_ativo else []
+
+    return render_template('bolao.html', convites=convites, jogos=jogos_bolao_ativo, bolaos=bolaos_abertos, participacoes=participacoes, bolao_ativo=bolao_ativo)
 
 # Aceitar convite
 @app.route('/bolao/<int:bolao_id>/aceitar', methods=['POST'])
@@ -969,17 +1275,49 @@ def admin_dashboard():
 
 @app.route('/alterar_senha', methods=['GET', 'POST'])
 def alterar_senha():
+    from validation import FormValidator, flash_validation_errors, get_validation_errors_for_template
+    
     if 'usuario' not in session:
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
+    
     usuario = Usuario.query.filter_by(nome=session['usuario']).first()
+    
     if request.method == 'POST':
-        senha_atual = request.form['senha_atual']
-        nova_senha = request.form['nova_senha']
-        if not check_password_hash(usuario.senha, senha_atual):
-            return render_template('perfil.html', usuario=usuario, erro="Senha atual incorreta.")
-        usuario.senha = generate_password_hash(nova_senha)
-        db.session.commit()
-        return render_template('perfil.html', usuario=usuario, mensagem="Senha alterada com sucesso.")
+        senha_atual = request.form.get('senha_atual', '')
+        nova_senha = request.form.get('nova_senha', '')
+        confirmar_senha = request.form.get('confirmar_senha', '')
+        
+        # Validar campos obrigatórios
+        validation_result = FormValidator.validate_required(senha_atual, "Senha atual")
+        
+        # Validar nova senha
+        password_validation = FormValidator.validate_password_strength(nova_senha)
+        if not password_validation.is_valid:
+            validation_result.errors.extend(password_validation.errors)
+            validation_result.is_valid = False
+        
+        # Validar confirmação de senha
+        if nova_senha != confirmar_senha:
+            validation_result.add_error("confirmar_senha", "Confirmação de senha não confere")
+        
+        # Verificar senha atual
+        if senha_atual and not check_password_hash(usuario.senha, senha_atual):
+            validation_result.add_error("senha_atual", "Senha atual incorreta")
+        
+        if not validation_result.is_valid:
+            flash_validation_errors(validation_result)
+            return render_template('perfil.html', usuario=usuario, 
+                                 validation_errors=get_validation_errors_for_template(validation_result))
+        
+        try:
+            usuario.senha = generate_password_hash(nova_senha)
+            db.session.commit()
+            flash("Senha alterada com sucesso!", "success")
+            return render_template('perfil.html', usuario=usuario)
+        except Exception as e:
+            flash(f"Erro ao alterar senha: {str(e)}", "error")
+            return render_template('perfil.html', usuario=usuario)
+    
     return render_template('perfil.html', usuario=usuario)
 @app.route('/sugestao_automatica')
 def sugestao_automatica():

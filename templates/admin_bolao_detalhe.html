@@ -5,51 +5,107 @@
 
 <div class="card mb-3">
   <div class="card-body">
-    <form method="post">
+    <form method="post" onsubmit="return validarResultadoBolao();">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label">Resultado (15 números, separados por vírgula)</label>
-          <input class="form-control" name="resultado" value="{{ bolao.resultado_json }}" placeholder="1,2,3,...,25">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Resultado do Concurso
+            <span class="badge bg-light text-dark ms-2"><span id="countRes">0</span>/15</span>
+          </label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for n in range(1,26) %}
+            <input type="checkbox" class="btn-check" id="res_{{n}}" value="{{n}}" autocomplete="off">
+            <label class="btn btn-outline-success rounded-circle res-btn" for="res_{{n}}" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">{{ n }}</label>
+            {% endfor %}
+          </div>
+          <small class="text-muted">Selecione exatamente 15 números sorteados.</small>
+          <input type="hidden" name="resultado" id="resultadoHidden">
         </div>
-        <div class="col-md-8">
+        <div class="col-md-6">
+          <label class="form-label">Valores por Faixa (R$)</label>
           <div class="row g-2">
-            <div class="col">
-              <label class="form-label">Valor 11 pts</label>
-              <input class="form-control" name="valor_11" placeholder="0.00">
+            {% for f in ['11','12','13','14','15'] %}
+            <div class="col-6 col-md-4">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">{{ f }} pts</span>
+                <input type="number" min="0" step="0.01" class="form-control" name="valor_{{ f }}" 
+                       placeholder="0.00" 
+                       value="{% if bolao.valores_por_pontos_json %}{{ (bolao.valores_por_pontos_json|from_json).get(f, '') }}{% endif %}"
+                       {% if bolao.status == 'fechado' %}readonly{% endif %}>
+              </div>
             </div>
-            <div class="col">
-              <label class="form-label">Valor 12 pts</label>
-              <input class="form-control" name="valor_12" placeholder="0.00">
-            </div>
-            <div class="col">
-              <label class="form-label">Valor 13 pts</label>
-              <input class="form-control" name="valor_13" placeholder="0.00">
-            </div>
-            <div class="col">
-              <label class="form-label">Valor 14 pts</label>
-              <input class="form-control" name="valor_14" placeholder="0.00">
-            </div>
-            <div class="col">
-              <label class="form-label">Valor 15 pts</label>
-              <input class="form-control" name="valor_15" placeholder="0.00">
-            </div>
+            {% endfor %}
           </div>
         </div>
       </div>
-      <div class="mt-3">
-        <button class="btn btn-primary"><i class="fa fa-save"></i> Salvar e Recalcular</button>
+      <div class="mt-3 d-flex gap-2">
+        {% if bolao.status != 'fechado' %}
+        <button class="btn btn-primary"><i class="fa fa-calculator"></i> Salvar Resultado e Recalcular</button>
+        {% else %}
+        <div class="alert alert-info mb-0">
+          <i class="fa fa-info-circle"></i> Este bolão está finalizado. Não é possível fazer alterações.
+        </div>
+        {% endif %}
         <a class="btn btn-secondary" href="{{ url_for('painel_admin') }}"><i class="fa fa-arrow-left"></i> Voltar</a>
       </div>
+      {% if bolao.status != 'fechado' %}
+      <div class="form-text mt-2">Ao salvar, os pontos e prêmios serão recalculados e o bolão será marcado como "fechado".</div>
+      {% endif %}
     </form>
   </div>
 </div>
+
+<script>
+function validarResultadoBolao() {
+  var resInputs = document.querySelectorAll('input.btn-check[id^="res_"]');
+  var sel = Array.from(resInputs).filter(i => i.checked).map(i => parseInt(i.value, 10));
+  if (sel.length !== 15) {
+    alert('Selecione exatamente 15 números para o resultado.');
+    return false;
+  }
+  sel.sort((a,b) => a-b);
+  document.getElementById('resultadoHidden').value = sel.join(',');
+  return true;
+}
+
+// Preencher grade com resultado existente (se houver JSON)
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var raw = {{ bolao.resultado_json|safe if bolao.resultado_json else 'null' }};
+    if (Array.isArray(raw)) {
+      raw.forEach(function(n) {
+        var el = document.getElementById('res_' + n);
+        if (el) el.checked = true;
+      });
+    }
+  } catch (e) {}
+  // contador dinâmico e limite
+  var resInputs = document.querySelectorAll('input.btn-check[id^="res_"]');
+  var countRes = document.getElementById('countRes');
+  function updateCount() {
+    var c = Array.from(resInputs).filter(i => i.checked).length;
+    if (countRes) countRes.textContent = c;
+  }
+  resInputs.forEach(function(inp) {
+    inp.addEventListener('change', function() {
+      var c = Array.from(resInputs).filter(i => i.checked).length;
+      if (this.checked && c > 15) {
+        this.checked = false;
+        alert('Resultado deve conter exatamente 15 números.');
+      }
+      updateCount();
+    });
+  });
+  updateCount();
+});
+</script>
 
 <div class="row">
   <div class="col-md-6">
     <div class="card mb-3">
       <div class="card-header">Convidar usuário</div>
       <div class="card-body">
+        {% if bolao.status != 'fechado' %}
         <form method="post" action="{{ url_for('convidar_para_bolao', bolao_id=bolao.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <div class="row g-2">
@@ -64,6 +120,11 @@
             </div>
           </div>
         </form>
+        {% else %}
+        <div class="alert alert-warning">
+          <i class="fa fa-exclamation-triangle"></i> Não é possível convidar usuários para bolões finalizados.
+        </div>
+        {% endif %}
         <ul class="list-group mt-3">
           {% for c in convites %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -87,7 +148,7 @@
               <tr>
                 <td>{{ j.id }}</td>
                 <td>{{ j.usuario_id }}</td>
-                <td>{{ j.numeros_json }}</td>
+                <td>{{ j.numeros_json|numeros_fmt }}</td>
                 <td>{{ j.pontos if j.pontos is not none else '-' }}</td>
                 <td>{{ '%.2f'|format(j.premio_calculado or 0) }}</td>
               </tr>
@@ -106,5 +167,78 @@
     </div>
   </div>
 </div>
-{% endblock %}
+
+ <!-- Card de Participantes e Valores -->
+ {% if bolao.status == 'fechado' %}
+ <div class="row mt-4">
+   <div class="col-12">
+     <div class="card">
+       <div class="card-header bg-success text-white">
+         <h5 class="mb-0"><i class="fa fa-trophy"></i> Participantes e Valores a Receber</h5>
+       </div>
+       <div class="card-body">
+         {% set participantes_dict = {} %}
+         {% for j in jogos %}
+           {% if j.usuario_id not in participantes_dict %}
+             {% set _ = participantes_dict.update({j.usuario_id: {'jogos': [], 'total_premio': 0}}) %}
+           {% endif %}
+           {% set _ = participantes_dict[j.usuario_id]['jogos'].append(j) %}
+           {% set _ = participantes_dict[j.usuario_id].update({'total_premio': participantes_dict[j.usuario_id]['total_premio'] + (j.premio_calculado or 0)}) %}
+         {% endfor %}
+         
+         {% if participantes_dict %}
+         <div class="table-responsive">
+           <table class="table table-striped">
+             <thead>
+               <tr>
+                 <th>Participante</th>
+                 <th>Jogos</th>
+                 <th>Melhor Pontuação</th>
+                 <th>Total a Receber</th>
+               </tr>
+             </thead>
+             <tbody>
+               {% for usuario_id, dados in participantes_dict.items() %}
+               <tr>
+                 <td>
+                   <strong>Usuário #{{ usuario_id }}</strong>
+                 </td>
+                 <td>{{ dados['jogos']|length }}</td>
+                 <td>
+                   {% set melhor_pontuacao = dados['jogos']|map(attribute='pontos')|select('number')|max %}
+                   {% if melhor_pontuacao %}
+                     <span class="badge bg-primary">{{ melhor_pontuacao }} pontos</span>
+                   {% else %}
+                     <span class="text-muted">-</span>
+                   {% endif %}
+                 </td>
+                 <td>
+                   <strong class="text-success">R$ {{ '%.2f'|format(dados['total_premio']) }}</strong>
+                 </td>
+               </tr>
+               {% endfor %}
+             </tbody>
+             <tfoot>
+               <tr class="table-info">
+                 <th colspan="3">Total Geral:</th>
+                 <th>
+                   {% set total_geral = participantes_dict.values()|map(attribute='total_premio')|sum %}
+                   <strong>R$ {{ '%.2f'|format(total_geral) }}</strong>
+                 </th>
+               </tr>
+             </tfoot>
+           </table>
+         </div>
+         {% else %}
+         <div class="alert alert-info">
+           <i class="fa fa-info-circle"></i> Nenhum participante encontrado neste bolão.
+         </div>
+         {% endif %}
+       </div>
+     </div>
+   </div>
+ </div>
+ {% endif %}
+
+ {% endblock %}
 

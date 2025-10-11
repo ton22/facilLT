@@ -3,6 +3,22 @@
 {% block content %}
 <h2 class="mb-4"><i class="fa fa-crown"></i> Painel do Administrador</h2>
 
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3"><i class="fa fa-file-import me-2"></i>Importar histórico (XLSX)</h5>
+    <form action="{{ url_for('importar_historico') }}" method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="col-sm-8 col-md-9">
+        <input class="form-control" type="file" name="arquivo" accept=".xlsx" required>
+        <div class="form-text">Envie o arquivo historico.xlsx no formato Excel (.xlsx). A planilha "historico" será usada se existir.</div>
+      </div>
+      <div class="col-sm-4 col-md-3">
+        <button type="submit" class="btn btn-primary w-100"><i class="fa fa-upload me-1"></i> Importar Arquivo</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <h4 class="mt-4">Usuários pendentes de aprovação</h4>
 {% if pendentes %}
 <table class="table table-bordered">
@@ -71,13 +87,44 @@
     </form>
 
 {% if bolaos %}
-<div class="list-group">
-    {% for b in bolaos %}
-    <a href="{{ url_for('detalhe_bolao', bolao_id=b.id) }}" class="list-group-item list-group-item-action">
-        <strong>{{ b.nome }}</strong> — Concurso: {{ b.numero_concurso or '-' }} — Data: {{ b.data_sorteio or '-' }} — Status: {{ b.status }}
-    </a>
-    {% endfor %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">Bolões Abertos</div>
+      <div class="list-group list-group-flush">
+        {% for b in bolaos if b.status == 'aberto' %}
+        <a href="{{ url_for('detalhe_bolao', bolao_id=b.id) }}" class="list-group-item list-group-item-action">
+          <div class="d-flex w-100 justify-content-between">
+            <h6 class="mb-1">{{ b.nome }}</h6>
+            <span class="badge bg-success">aberto</span>
+          </div>
+          <small>Concurso: {{ b.numero_concurso or '-' }} • Data: {{ b.data_sorteio|datetime_short if b.data_sorteio else '-' }}</small>
+        </a>
+        {% else %}
+        <div class="list-group-item"><small class="text-muted">Nenhum bolão aberto.</small></div>
+        {% endfor %}
+      </div>
     </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">Bolões Finalizados</div>
+      <div class="list-group list-group-flush">
+        {% for b in bolaos if b.status != 'aberto' %}
+        <a href="{{ url_for('detalhe_bolao', bolao_id=b.id) }}" class="list-group-item list-group-item-action">
+          <div class="d-flex w-100 justify-content-between">
+            <h6 class="mb-1">{{ b.nome }}</h6>
+            <span class="badge bg-secondary">{{ b.status }}</span>
+          </div>
+          <small>Concurso: {{ b.numero_concurso or '-' }} • Data: {{ b.data_sorteio|datetime_short if b.data_sorteio else '-' }}</small>
+        </a>
+        {% else %}
+        <div class="list-group-item"><small class="text-muted">Nenhum bolão finalizado.</small></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
 {% else %}
 <p class="text-muted">Nenhum bolão criado ainda.</p>
 {% endif %}

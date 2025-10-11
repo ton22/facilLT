@@ -4,21 +4,50 @@
 <div class="row justify-content-center">
     <div class="col-md-6">
         <h2 class="mb-4"><i class="fa fa-user-plus"></i> Cadastro</h2>
-        <form method="post">
+        <form method="post" data-loading data-loading-text="Cadastrando usuário...">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="mb-3">
                 <label>Usuário:</label>
-                <input type="text" name="usuario" class="form-control" required>
+                <input type="text" name="usuario" class="form-control {% if validation_errors and 'usuario' in validation_errors %}is-invalid{% endif %}" 
+                       value="{{ request.form.get('usuario', '') }}" required>
+                {% if validation_errors and 'usuario' in validation_errors %}
+                    <div class="invalid-feedback">
+                        {% for error in validation_errors['usuario'] %}
+                            {{ error }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <div class="form-text">
+                    Mínimo 3 caracteres, apenas letras, números e underscore
+                </div>
             </div>
             <div class="mb-3">
                 <label>Senha:</label>
-                <input type="password" name="senha" class="form-control" required>
+                <input type="password" name="senha" class="form-control {% if validation_errors and 'senha' in validation_errors %}is-invalid{% endif %}" required>
+                {% if validation_errors and 'senha' in validation_errors %}
+                    <div class="invalid-feedback">
+                        {% for error in validation_errors['senha'] %}
+                            {{ error }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <div class="form-text">
+                    Mínimo 6 caracteres, incluindo pelo menos uma letra e um número
+                </div>
+            </div>
+            <div class="mb-3">
+                <label>Confirmar Senha:</label>
+                <input type="password" name="confirmar_senha" class="form-control {% if validation_errors and 'confirmar_senha' in validation_errors %}is-invalid{% endif %}" required>
+                {% if validation_errors and 'confirmar_senha' in validation_errors %}
+                    <div class="invalid-feedback">
+                        {% for error in validation_errors['confirmar_senha'] %}
+                            {{ error }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
             <button type="submit" class="btn btn-primary"><i class="fa fa-user-plus"></i> Cadastrar</button>
         </form>
-        {% if erro %}
-        <div class="alert alert-danger mt-3">{{ erro }}</div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

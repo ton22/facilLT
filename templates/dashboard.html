@@ -28,7 +28,7 @@
         </div>
     </div>
 </div>
-<a href="{{ url_for('exportar_predicoes') }}" class="btn btn-outline-secondary"><i class="fa fa-file-csv"></i> Exportar Predições CSV</a>
+<a href="{{ url_for('exportar_predicoes') }}" class="btn btn-outline-secondary" data-loading data-loading-text="Exportando dados..."><i class="fa fa-file-csv"></i> Exportar Predições CSV</a>
 <a href="{{ url_for('index') }}" class="btn btn-secondary ms-2"><i class="fa fa-arrow-left"></i> Voltar</a>
 
 <hr>
@@ -36,11 +36,11 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
     <p class="text-muted mb-2 mb-md-0">Resumo estatístico — escolha a fonte dos dados:</p>
     <div class="btn-group w-100 w-md-auto" role="group" aria-label="Fonte dos dados">
-        <a href="?source=predicoes" class="btn btn-sm btn-outline-primary {% if data_source != 'concursos' %}active{% endif %}">
+        <a href="?source=predicoes" class="btn btn-sm btn-outline-primary {% if data_source != 'concursos' %}active{% endif %}" data-loading data-loading-text="Carregando análise das predições...">
             <i class="fa fa-save me-1"></i>
             <span class="d-none d-sm-inline">Predições </span>Salvas
         </a>
-        <a href="?source=concursos" class="btn btn-sm btn-outline-success {% if data_source == 'concursos' %}active{% endif %}">
+        <a href="?source=concursos" class="btn btn-sm btn-outline-success {% if data_source == 'concursos' %}active{% endif %}" data-loading data-loading-text="Carregando análise dos concursos...">
             <i class="fa fa-trophy me-1"></i>
             <span class="d-none d-sm-inline">Concursos </span>Oficiais
         </a>

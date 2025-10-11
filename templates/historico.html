@@ -12,9 +12,9 @@
                     <i class="fa fa-download"></i> Exportar
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
-                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='csv') }}"><i class="fa fa-file-csv text-success"></i> CSV</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='xlsx') }}"><i class="fa fa-file-excel text-primary"></i> Excel</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='txt') }}"><i class="fa fa-file-alt text-secondary"></i> Texto</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='csv') }}" data-loading data-loading-text="Exportando CSV..."><i class="fa fa-file-csv text-success"></i> CSV</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='xlsx') }}" data-loading data-loading-text="Exportando Excel..."><i class="fa fa-file-excel text-primary"></i> Excel</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('exportar_predicoes', formato='txt') }}" data-loading data-loading-text="Exportando texto..."><i class="fa fa-file-alt text-secondary"></i> Texto</a></li>
                 </ul>
             </div>
         </div>
@@ -22,9 +22,9 @@
     <div class="card-body">
         <div class="d-none d-md-block mb-3">
             <div class="btn-group">
-                <a href="{{ url_for('exportar_predicoes', formato='csv') }}" class="btn btn-outline-success"><i class="fa fa-file-csv"></i> Exportar CSV</a>
-                <a href="{{ url_for('exportar_predicoes', formato='xlsx') }}" class="btn btn-outline-primary"><i class="fa fa-file-excel"></i> Exportar XLSX</a>
-                <a href="{{ url_for('exportar_predicoes', formato='txt') }}" class="btn btn-outline-secondary"><i class="fa fa-file-alt"></i> Exportar TXT</a>
+                <a href="{{ url_for('exportar_predicoes', formato='csv') }}" class="btn btn-outline-success" data-loading data-loading-text="Exportando CSV..."><i class="fa fa-file-csv"></i> Exportar CSV</a>
+                <a href="{{ url_for('exportar_predicoes', formato='xlsx') }}" class="btn btn-outline-primary" data-loading data-loading-text="Exportando Excel..."><i class="fa fa-file-excel"></i> Exportar XLSX</a>
+                <a href="{{ url_for('exportar_predicoes', formato='txt') }}" class="btn btn-outline-secondary" data-loading data-loading-text="Exportando texto..."><i class="fa fa-file-alt"></i> Exportar TXT</a>
             </div>
         </div>
 
@@ -49,9 +49,9 @@
                     {% for r in registros.items %}
                     <tr>
                         <td class="d-none d-md-table-cell">{{ r.id }}</td>
-                        <td>{{ r.data }}</td>
+                        <td>{{ r.data|datetime_short }}</td>
                         <td>
-                            <span class="d-none d-md-inline">{{ r.numeros }}</span>
+                            <span class="d-none d-md-inline numbers-copy" data-copy="{{ r.numeros|numeros_fmt }}" title="Clique para copiar">{{ r.numeros|numeros_fmt }}</span>
                             <button type="button" class="btn btn-sm btn-outline-primary d-md-none" data-bs-toggle="modal" data-bs-target="#numerosModal{{ r.id }}">
                                 <i class="fa fa-eye"></i>
                             </button>
@@ -66,7 +66,13 @@
                                         </div>
                                         <div class="modal-body">
                                             <div class="mb-3">
-                                                <strong>Números:</strong> {{ r.numeros }}
+                                                <strong>Números:</strong>
+                                                <div class="chips numbers-copy mt-2" data-copy="{{ r.numeros|numeros_fmt }}" title="Toque para copiar">
+                                                    {% for n in r.numeros|numeros_list %}
+                                                    <span class="chip">{{ n }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                                <small class="text-muted">Toque nos números para copiar</small>
                                             </div>
                                             <div class="row g-2">
                                                 <div class="col-6">
@@ -135,7 +141,9 @@
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                 <select name="bolao_id" class="form-select form-select-sm d-inline w-auto">
                                     {% for b in BolaosQuery if BolaosQuery %}
+                                    {% if b.status == 'aberto' %}
                                     <option value="{{ b.id }}">{{ b.nome }}</option>
+                                    {% endif %}
                                     {% endfor %}
                                 </select>
                                 <button type="submit" class="btn btn-sm btn-outline-primary" {% if r.enviado %}disabled{% endif %}>
@@ -211,4 +219,36 @@
         </div>
     </div>
 </div>
+<script>
+// Copiar números ao tocar/clicar em um bloco com class "numbers-copy"
+(function(){
+  function copyText(txt){
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(txt);
+      }
+    } catch(e) {}
+    // Fallback
+    return new Promise(function(resolve,reject){
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject();
+      } catch(e){ reject(e); }
+    });
+  }
+  document.addEventListener('click', function(ev){
+    var el = ev.target.closest('.numbers-copy');
+    if(!el) return;
+    var txt = el.getAttribute('data-copy') || el.innerText || '';
+    copyText(txt).then(function(){
+      // feedback simples; em futuro, trocar por toast
+      alert('Números copiados');
+    }).catch(function(){ alert('Não foi possível copiar'); });
+  });
+})();
+</script>
 {% endblock %}

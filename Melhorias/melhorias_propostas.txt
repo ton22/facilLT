@@ -98,3 +98,134 @@ Resumo das mudanças aplicadas agora:
 - Exclusões via POST com CSRF em `admin.html` e `historico.html`
 - `app.py`: remoção de rotas duplicadas de autenticação; registro do blueprint `auth`; centralização das estatísticas no `index`; invalidação de cache após gravações; remoção de código duplicado e bloco residual; cookies e lifetime ajustados
 - Próximos passos: adicionar Flask-Migrate, mover lógicas para `services/`, e migrar `Predicao.numeros` para JSON com validação
+
+## 7. UI/UX — Predição, Histórico e Meus Bolões
+
+Data: 2025-10-08
+
+Objetivo:
+- Alinhar corretamente os botões na página de predição, remover bolões finalizados das opções de envio no histórico e modernizar/organizar a página "Meus Bolões" com melhor apresentação e detalhamento.
+
+Implementações:
+- Predição (templates/index.html):
+  - Botões "Sugestão Automática", "Fazer Predição" e (se admin) "Executar Treinamento" agrupados em uma barra de ações centralizada e responsiva.
+  - O formulário de predição recebeu `id="predicaoForm"` e o botão "Fazer Predição" passou a usar `form="predicaoForm"` para permitir alinhamento fora do <form> sem quebrar submissão.
+  - Mantido CSRF; botão de treinamento permanece exclusivo para administradores.
+
+- Histórico (app.py, templates/historico.html):
+  - Backend: rota `/historico` agora fornece apenas bolões com `status='aberto'` ao template (remoção dos finalizados da lista de envio).
+  - Frontend: select no histórico filtra defensivamente por `status=='aberto'`.
+
+- Meus Bolões (app.py, templates/bolao.html, static/style.css):
+  - Finalizados em formato de lista moderna (list-group) com modal de detalhes (concurso, participantes e estatísticas por faixa) ao clicar.
+  - Card de premiação reorganizado e alinhado usando grade de estatísticas (`.stats-grid`), melhor legibilidade em desktop e mobile.
+  - Renomeado "Meus Jogos no Bolão" para "Jogos do Bolão" e inclusão do nome do bolão ativo no cabeçalho.
+  - Exibição de todos os jogos do bolão ativo em que o usuário participa (consulta por `bolao_id`), ao invés de apenas jogos do usuário.
+  - Lógica de seleção do bolão ativo no backend: considera convites aceitos do usuário e escolhe o bolão em `status='aberto'` mais recente (por `criado_em`).
+  - CSS atualizado com estilos modernos `.stats-grid` e `.list-modern` para visual contemporâneo.
+
+Arquivos alterados:
+- templates/index.html
+- templates/historico.html
+- templates/bolao.html
+- static/style.css
+- app.py
+
+Resultados esperados:
+- Disposição harmoniosa e intuitiva dos botões na predição.
+- Usuários não veem bolões finalizados na lista de envio do histórico.
+- "Meus Bolões" exibe finalizados em lista com popup de detalhes; card de premiação limpo e alinhado; card "Jogos do Bolão" mostra jogos do bolão ativo.
+- Aparência geral mais moderna e coerente.
+
+Testes manuais realizados:
+- Predição: botões alinhados; submissão e sugestão funcionando; treinamento visível só para admin.
+- Histórico: dropdown contém apenas bolões abertos; envio respeita CSRF e limites.
+- Meus Bolões: lista de finalizados abre modal com detalhes; card de premiação alinhado; jogos listados para o bolão ativo; mensagens informativas quando não há bolão ativo ou jogos.
+
+Próximos passos:
+- Permitir seleção manual de bolão ativo quando o usuário participa de múltiplos bolões abertos.
+- Melhorar formatação de `numeros_json` na listagem (exibir como lista amigável).
+- Adicionar testes automatizados para as rotas e templates alterados.
+
+## 10. UI/UX — Histórico (Mobile) e Formatação de Jogos
+
+Data: 2025-10-08
+
+Objetivo:
+- Padronizar a visualização dos números dos jogos com separador "-" e otimizar a página de histórico para dispositivos móveis eliminando rolagem horizontal e garantindo encaixe adequado dos elementos.
+
+Implementações:
+- Backend (app.py):
+  - Filtro de template `numeros_fmt` atualizado para exibir números separados por hífen (" - ") e remover colchetes e vírgulas. Mantido parsing robusto (JSON, literal_eval e fallback regex).
+- Aplicação do filtro nos templates:
+  - templates/historico.html: números dos jogos na tabela e no modal mobile usando `|numeros_fmt`.
+  - templates/index.html: "Últimas Predições" e bloco de resultado usam `|numeros_fmt`.
+  - templates/bolao.html: números dos jogos do bolão ativo renderizados com `|numeros_fmt`.
+  - templates/admin_bolao_detalhe.html: números dos jogos exibidos com `|numeros_fmt`.
+- Datas:
+  - Mantida a formatação curta `datetime_short` no Histórico e aplicada em Admin (datas de sorteio) para consistência.
+- Histórico (mobile) — CSS (static/style.css):
+  - Removido overflow horizontal (html, body e page-content com overflow-x: hidden).
+  - Tabelas com white-space normal e word-break para evitar estouro lateral.
+  - Select de bolões e botões de ação empilhados em mobile (largura 100% e espaçamentos adequados).
+  - Flex containers críticos com `flex-wrap` em telas pequenas para melhor ajuste.
+
+Arquivos alterados:
+- app.py
+- templates/historico.html
+- templates/index.html
+- templates/bolao.html
+- templates/admin_bolao_detalhe.html
+- templates/admin.html
+- static/style.css
+
+Resultados:
+- Números dos jogos exibidos como "1 - 2 - 3 - ..." em toda a aplicação, evitando confusão visual.
+- Página de histórico sem barra de rolagem horizontal excedente em mobile; elementos reorganizados para caber na tela.
+
+Testes manuais:
+- Conferidos números com separador "-" no Histórico (tabela e modal), Index (últimas predições e predição) e Bolão/Admin.
+- Em dispositivos móveis, tabela do histórico sem overflow; select/botões reposicionados e legíveis.
+
+Notas / Próximos passos:
+- Tornar a lista de números clicável para copiar nos dispositivos móveis (UX).
+- Considerar visualização "chips" para números em cards no mobile.
+
+## 11. UX — Cópia rápida e chips para números
+
+Data: 2025-10-08
+
+Objetivo:
+- Tornar a lista de números clicável para copiar em dispositivos móveis e desktop.
+- Adotar visualização em “chips” para números em cards no mobile, melhorando legibilidade e toque.
+
+Implementações:
+- Backend (app.py):
+  - Novo filtro `numeros_list` para disponibilizar a lista de inteiros nos templates (suporta JSON/literal_eval/fallback).
+- Estilos (static/style.css):
+  - Classes `.chips` e `.chip` para layout compacto e responsivo dos números; `.numbers-copy` para indicar blocos copiáveis.
+- Histórico (templates/historico.html):
+  - Desktop: texto de números clicável (copia com um clique).
+  - Mobile: números em “chips”, bloco inteiro tocável para copiar; ajuda textual “Toque para copiar”.
+  - Script JS genérico para cópia (clipboard com fallback) embutido ao final da página.
+- Predição (templates/index.html):
+  - Últimas Predições: desktop com texto clicável; mobile com “chips” clicáveis.
+  - Bloco de resultado: números renderizados como “chips” clicáveis.
+- Bolão (templates/bolao.html):
+  - Tabela “Jogos do Bolão”: desktop com texto clicável; mobile com “chips” clicáveis.
+
+Arquivos alterados:
+- app.py
+- static/style.css
+- templates/historico.html
+- templates/index.html
+- templates/bolao.html
+
+Resultados:
+- UX mais intuitiva: toque/clique copia rapidamente a sequência de números.
+- Visualização amigável em mobile com “chips”, evitando confusão entre dígitos.
+
+Observações:
+- Feedback simples com alert; futuro: substituir por toast do Bootstrap.
+- Mantida consistência do separador “ - ” na string copiada.
+

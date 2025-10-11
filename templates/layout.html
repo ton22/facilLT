@@ -109,6 +109,22 @@
     <!-- Overlay para fechar o menu em dispositivos móveis -->
     <div id="sidebar-overlay" class="d-md-none"></div>
     
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="text-center">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loading-text">Carregando...</div>
+        </div>
+    </div>
+    
+    <!-- Progress Bar -->
+    <div id="progress-container" class="progress-container">
+        <div id="progress-bar" class="progress-bar-animated"></div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
     <!-- Scripts do Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
@@ -151,6 +167,185 @@
                 if (window.innerWidth >= 768) {
                     wrapper.classList.remove('toggled');
                 }
+            });
+        });
+        
+        // Loading and Validation Utilities
+        window.UXUtils = {
+            // Loading Overlay
+            showLoading: function(text = 'Carregando...') {
+                const overlay = document.getElementById('loading-overlay');
+                const loadingText = document.getElementById('loading-text');
+                if (loadingText) loadingText.textContent = text;
+                if (overlay) overlay.style.display = 'flex';
+            },
+            
+            hideLoading: function() {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+            },
+            
+            // Progress Bar
+            showProgress: function() {
+                const container = document.getElementById('progress-container');
+                if (container) container.style.display = 'block';
+            },
+            
+            hideProgress: function() {
+                const container = document.getElementById('progress-container');
+                if (container) container.style.display = 'none';
+            },
+            
+            setProgress: function(percentage) {
+                const bar = document.getElementById('progress-bar');
+                if (bar) bar.style.width = percentage + '%';
+            },
+            
+            // Button Loading State
+            setButtonLoading: function(button, loading = true) {
+                if (loading) {
+                    button.classList.add('btn-loading');
+                    button.disabled = true;
+                    if (!button.querySelector('.btn-text')) {
+                        button.innerHTML = '<span class="btn-text">' + button.innerHTML + '</span>';
+                    }
+                } else {
+                    button.classList.remove('btn-loading');
+                    button.disabled = false;
+                    const btnText = button.querySelector('.btn-text');
+                    if (btnText) {
+                        button.innerHTML = btnText.innerHTML;
+                    }
+                }
+            },
+            
+            // Toast Notifications
+            showToast: function(message, type = 'info', duration = 5000) {
+                const container = document.getElementById('toast-container');
+                if (!container) return;
+                
+                const toastId = 'toast-' + Date.now();
+                const bgClass = type === 'success' ? 'bg-success' : 
+                               type === 'error' ? 'bg-danger' : 
+                               type === 'warning' ? 'bg-warning' : 'bg-info';
+                
+                const toastHTML = `
+                    <div id="${toastId}" class="toast ${bgClass} text-white" role="alert">
+                        <div class="toast-header ${bgClass} text-white border-0">
+                            <strong class="me-auto">
+                                <i class="fa ${type === 'success' ? 'fa-check-circle' : 
+                                              type === 'error' ? 'fa-exclamation-circle' : 
+                                              type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>
+                                ${type === 'success' ? 'Sucesso' : 
+                                  type === 'error' ? 'Erro' : 
+                                  type === 'warning' ? 'Aviso' : 'Informação'}
+                            </strong>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                        </div>
+                        <div class="toast-body">${message}</div>
+                    </div>
+                `;
+                
+                container.insertAdjacentHTML('beforeend', toastHTML);
+                const toastElement = document.getElementById(toastId);
+                const toast = new bootstrap.Toast(toastElement, { delay: duration });
+                toast.show();
+                
+                // Remove toast element after it's hidden
+                toastElement.addEventListener('hidden.bs.toast', function() {
+                    toastElement.remove();
+                });
+            },
+            
+            // Form Validation
+            validateField: function(field, isValid, message = '') {
+                // Remove existing validation classes
+                field.classList.remove('is-valid', 'is-invalid', 'field-error', 'field-success');
+                
+                // Remove existing feedback
+                const existingFeedback = field.parentNode.querySelector('.invalid-feedback, .valid-feedback, .error-message, .success-message');
+                if (existingFeedback) {
+                    existingFeedback.remove();
+                }
+                
+                if (isValid) {
+                    field.classList.add('is-valid', 'field-success');
+                    if (message) {
+                        const feedback = document.createElement('div');
+                        feedback.className = 'valid-feedback success-message';
+                        feedback.textContent = message;
+                        field.parentNode.appendChild(feedback);
+                    }
+                } else {
+                    field.classList.add('is-invalid', 'field-error');
+                    if (message) {
+                        const feedback = document.createElement('div');
+                        feedback.className = 'invalid-feedback error-message';
+                        feedback.textContent = message;
+                        field.parentNode.appendChild(feedback);
+                    }
+                }
+            },
+            
+            clearValidation: function(form) {
+                const fields = form.querySelectorAll('.form-control, .form-select');
+                fields.forEach(field => {
+                    field.classList.remove('is-valid', 'is-invalid', 'field-error', 'field-success');
+                });
+                
+                const feedbacks = form.querySelectorAll('.invalid-feedback, .valid-feedback, .error-message, .success-message');
+                feedbacks.forEach(feedback => feedback.remove());
+            },
+            
+            // Real-time validation
+            setupRealTimeValidation: function(form, validators = {}) {
+                const fields = form.querySelectorAll('.form-control, .form-select');
+                
+                fields.forEach(field => {
+                    const fieldName = field.name || field.id;
+                    if (validators[fieldName]) {
+                        field.addEventListener('blur', function() {
+                            const result = validators[fieldName](field.value);
+                            UXUtils.validateField(field, result.isValid, result.message);
+                        });
+                        
+                        field.addEventListener('input', function() {
+                            // Clear validation on input to give immediate feedback
+                            if (field.classList.contains('is-invalid')) {
+                                const result = validators[fieldName](field.value);
+                                if (result.isValid) {
+                                    UXUtils.validateField(field, true, result.message);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        };
+        
+        // Auto-setup for forms with loading states
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add loading states to forms that might take time
+            const formsWithLoading = document.querySelectorAll('form[data-loading]');
+            formsWithLoading.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn) {
+                        UXUtils.setButtonLoading(submitBtn, true);
+                    }
+                    
+                    const loadingText = form.getAttribute('data-loading-text') || 'Processando...';
+                    UXUtils.showLoading(loadingText);
+                });
+            });
+            
+            // Add loading states to links that might take time
+            const linksWithLoading = document.querySelectorAll('a[data-loading]');
+            linksWithLoading.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    const loadingText = link.getAttribute('data-loading-text') || 'Carregando...';
+                    UXUtils.showLoading(loadingText);
+                });
             });
         });
     </script>
